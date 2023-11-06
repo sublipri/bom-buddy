@@ -1,3 +1,4 @@
+use crate::descriptor::IconDescriptor;
 use chrono::{prelude::*, Duration};
 use serde::{Deserialize, Serialize};
 
@@ -31,7 +32,7 @@ pub struct HourlyForecastData {
     pub wind: HourlyForecastWind,
     pub relative_humidity: u8,
     pub uv: u8,
-    pub icon_descriptor: String,
+    pub icon_descriptor: IconDescriptor,
     pub next_three_hourly_forecast_period: DateTime<Utc>,
     pub time: DateTime<Utc>,
     pub is_night: bool,
