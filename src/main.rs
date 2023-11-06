@@ -31,7 +31,7 @@ fn main() -> Result<()> {
     };
 
     loop {
-        let was_updated = client.update_if_due(&location.geohash, &mut location.weather)?;
+        let was_updated = client.update_if_due(&mut location)?;
         if was_updated {
             write_state_file(&state_file, &location)?;
         }

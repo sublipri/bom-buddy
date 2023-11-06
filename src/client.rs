@@ -141,11 +141,12 @@ impl Client {
         Ok(location)
     }
 
-    pub fn update_if_due(&self, geohash: &str, weather: &mut Weather) -> Result<bool> {
+    pub fn update_if_due(&self, location: &mut Location) -> Result<bool> {
         let now = Utc::now();
         let mut was_updated = false;
+        let weather = &mut location.weather;
         if now > weather.observation.next_issue_time {
-            let observation = self.get_observation(geohash)?;
+            let observation = self.get_observation(&location.geohash)?;
             if observation.issue_time != weather.observation.issue_time {
                 let past = take(&mut weather.observation);
                 weather.observation = observation;
@@ -155,20 +156,20 @@ impl Client {
                 }
                 was_updated = true;
             }
-            let warnings = self.get_warnings(geohash)?;
+            let warnings = self.get_warnings(&location.geohash)?;
             if warnings != weather.warnings {
                 was_updated = true;
             }
         }
 
         if now > weather.hourly_forecast.next_issue_time {
-            let hourly = self.get_hourly(geohash)?;
+            let hourly = self.get_hourly(&location.geohash)?;
             weather.hourly_forecast = hourly;
             was_updated = true;
         }
 
         if now > weather.daily_forecast.next_issue_time {
-            let daily = self.get_daily(geohash)?;
+            let daily = self.get_daily(&location.geohash)?;
             weather.daily_forecast = daily;
             was_updated = true;
         }
