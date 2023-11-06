@@ -1,8 +1,7 @@
 use crate::daily::{DailyForecast, DailyResponse};
 use crate::hourly::{HourlyForecast, HourlyResponse};
-use crate::location::{Location, LocationResponse};
+use crate::location::{Location, LocationResponse, SearchResponse, SearchResult};
 use crate::observation::{Observation, ObservationResponse};
-use crate::search::{SearchResponse, SearchResult};
 use crate::warning::{Warning, WarningResponse};
 use crate::weather::Weather;
 use anyhow::anyhow;

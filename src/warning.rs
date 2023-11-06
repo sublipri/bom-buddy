@@ -1,3 +1,4 @@
+use crate::location::State;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -8,7 +9,7 @@ pub struct Warning {
     pub issue_time: String,
     pub phase: String,
     pub short_title: String,
-    pub state: String,
+    pub state: State,
     pub title: String,
     pub r#type: String,
     pub warning_group_type: String,
