@@ -1,8 +1,12 @@
+pub mod cli;
 pub mod client;
+pub mod config;
 pub mod daily;
 pub mod descriptor;
 pub mod hourly;
 pub mod location;
+pub mod logging;
 pub mod observation;
+pub mod persistence;
 pub mod warning;
 pub mod weather;
