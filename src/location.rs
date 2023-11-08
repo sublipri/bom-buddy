@@ -1,3 +1,4 @@
+use crate::observation::Station;
 use crate::weather::Weather;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -6,6 +7,7 @@ use strum_macros::Display;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Location {
     pub geohash: String,
+    pub station: Station,
     pub has_wave: bool,
     pub id: String,
     pub latitude: f64,

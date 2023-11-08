@@ -124,9 +124,11 @@ impl Client {
         let url = format!("{URL_BASE}/{}", &geohash[..6]);
         let response: LocationResponse = serde_json::from_value(self.get(&url)?)?;
         let weather = self.get_weather(geohash)?;
+        let station = weather.observation.station.clone();
         let location = Location {
             geohash: response.data.geohash,
             weather,
+            station,
             has_wave: response.data.has_wave,
             id: response.data.id,
             latitude: response.data.latitude,
