@@ -17,7 +17,7 @@ pub struct Observation {
     pub max_temp_time: DateTime<Utc>,
     pub min_temp: f32,
     pub min_temp_time: DateTime<Utc>,
-    pub rain_since_9am: u32,
+    pub rain_since_9am: f32,
     pub humidity: u8,
     pub station: Station,
 }
@@ -67,7 +67,7 @@ pub struct ObservationData {
     pub max_gust: MaxGust,
     pub max_temp: Temperature,
     pub min_temp: Temperature,
-    pub rain_since_9am: u32,
+    pub rain_since_9am: f32,
     pub humidity: u8,
     pub station: Station,
 }
