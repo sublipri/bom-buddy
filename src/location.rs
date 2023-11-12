@@ -1,13 +1,13 @@
-use crate::observation::Station;
+use crate::station::WeatherStation;
 use crate::weather::Weather;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use strum_macros::Display;
+use strum_macros::{Display, EnumString};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Location {
     pub geohash: String,
-    pub station: Station,
+    pub station: WeatherStation,
     pub has_wave: bool,
     pub id: String,
     pub latitude: f64,
@@ -15,6 +15,7 @@ pub struct Location {
     pub marine_area_id: Option<String>,
     pub name: String,
     pub state: State,
+    pub postcode: String,
     pub tidal_point: Option<String>,
     pub timezone: String,
     pub weather: Weather,
@@ -46,7 +47,7 @@ pub struct LocationResponse {
     pub metadata: LocationMetadata,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SearchResult {
     pub geohash: String,
     pub id: String,
@@ -73,8 +74,9 @@ pub struct SearchResponse {
     pub metadata: SearchMetadata,
 }
 
-#[derive(Debug, Display, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Display, Deserialize, Serialize, Eq, PartialEq, EnumString)]
 #[serde(rename_all = "UPPERCASE")]
+#[strum(serialize_all = "UPPERCASE")]
 pub enum State {
     Act,
     Nsw,

@@ -1,6 +1,6 @@
 use crate::daily::{DailyForecast, DailyResponse};
 use crate::hourly::{HourlyForecast, HourlyResponse};
-use crate::location::{Location, LocationResponse, SearchResponse, SearchResult};
+use crate::location::{Location, LocationData, LocationResponse, SearchResponse, SearchResult};
 use crate::observation::{Observation, ObservationResponse};
 use crate::warning::{Warning, WarningResponse};
 use crate::weather::Weather;
@@ -12,7 +12,7 @@ use std::mem::take;
 use std::thread::sleep;
 use std::time::Duration;
 use tracing::{debug, error};
-use ureq::{Agent, AgentBuilder, Error};
+use ureq::{Agent, AgentBuilder, Error, Response};
 
 const URL_BASE: &str = "https://api.weather.bom.gov.au/v1/locations";
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
@@ -39,14 +39,13 @@ impl Client {
         }
     }
 
-    fn get(&self, url: &str) -> Result<serde_json::Value> {
+    fn get(&self, url: &str) -> Result<Response> {
         debug!("Fetching {url}");
         let mut attemps = 0;
         while attemps < self.retry_limit {
             match self.client.get(url).call() {
                 Ok(response) => {
-                    let json = response.into_json()?;
-                    return Ok(json);
+                    return Ok(response);
                 }
                 Err(Error::Status(code, response)) => match code {
                     503 | 429 | 408 => {
@@ -79,34 +78,52 @@ impl Client {
         Err(anyhow!("Retry limit exceeded"))
     }
 
+    fn get_string(&self, url: &str) -> Result<String> {
+        let response = self.get(url)?;
+        Ok(response.into_string()?)
+    }
+
+    fn get_json(&self, url: &str) -> Result<serde_json::Value> {
+        let response = self.get(url)?;
+        Ok(response.into_json()?)
+    }
+
     pub fn search(&self, term: &str) -> Result<Vec<SearchResult>> {
         let url = format!("{URL_BASE}?search={term}");
-        let response: SearchResponse = serde_json::from_value(self.get(&url)?)?;
+        let response: SearchResponse = serde_json::from_value(self.get_json(&url)?)?;
+        debug!(
+            "Search term {} returned {} results.",
+            term,
+            response.data.len()
+        );
+        for result in &response.data {
+            debug!("{:#?}", result);
+        }
         Ok(response.data)
     }
 
-    // Search results contain a 7 character geohash but endpoints expect 6.
+    // Search results contain a 7 character geohash but other endpoints expect 6.
     pub fn get_observation(&self, geohash: &str) -> Result<Observation> {
         let url = format!("{URL_BASE}/{}/observations", &geohash[..6]);
-        let response: ObservationResponse = serde_json::from_value(self.get(&url)?)?;
+        let response: ObservationResponse = serde_json::from_value(self.get_json(&url)?)?;
         Ok(response.into())
     }
 
     pub fn get_daily(&self, geohash: &str) -> Result<DailyForecast> {
         let url = format!("{URL_BASE}/{}/forecasts/daily", &geohash[..6]);
-        let response: DailyResponse = serde_json::from_value(self.get(&url)?)?;
+        let response: DailyResponse = serde_json::from_value(self.get_json(&url)?)?;
         Ok(response.into())
     }
 
     pub fn get_hourly(&self, geohash: &str) -> Result<HourlyForecast> {
         let url = format!("{URL_BASE}/{}/forecasts/hourly", &geohash[..6]);
-        let response: HourlyResponse = serde_json::from_value(self.get(&url)?)?;
+        let response: HourlyResponse = serde_json::from_value(self.get_json(&url)?)?;
         Ok(response.into())
     }
 
     pub fn get_warnings(&self, geohash: &str) -> Result<Vec<Warning>> {
         let url = format!("{URL_BASE}/{}/warnings", &geohash[..6]);
-        let response: WarningResponse = serde_json::from_value(self.get(&url)?)?;
+        let response: WarningResponse = serde_json::from_value(self.get_json(&url)?)?;
         Ok(response.data)
     }
 
@@ -120,27 +137,15 @@ impl Client {
         })
     }
 
-    pub fn get_location(&self, geohash: &str) -> Result<Location> {
+    pub fn get_location(&self, geohash: &str) -> Result<LocationData> {
         let url = format!("{URL_BASE}/{}", &geohash[..6]);
-        let response: LocationResponse = serde_json::from_value(self.get(&url)?)?;
-        let weather = self.get_weather(geohash)?;
-        let station = weather.observation.station.clone();
-        let location = Location {
-            geohash: response.data.geohash,
-            weather,
-            station,
-            has_wave: response.data.has_wave,
-            id: response.data.id,
-            latitude: response.data.latitude,
-            longitude: response.data.longitude,
-            marine_area_id: response.data.marine_area_id,
-            name: response.data.name,
-            state: response.data.state,
-            tidal_point: response.data.tidal_point,
-            timezone: response.data.timezone,
-        };
+        let response: LocationResponse = serde_json::from_value(self.get_json(&url)?)?;
+        Ok(response.data)
+    }
 
-        Ok(location)
+    pub fn get_station_list(&self) -> Result<String> {
+        let url = "https://reg.bom.gov.au/climate/data/lists_by_element/stations.txt";
+        self.get_string(url)
     }
 
     pub fn update_if_due(&self, location: &mut Location) -> Result<bool> {

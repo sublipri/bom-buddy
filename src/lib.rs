@@ -8,5 +8,7 @@ pub mod location;
 pub mod logging;
 pub mod observation;
 pub mod persistence;
+pub mod services;
+pub mod station;
 pub mod warning;
 pub mod weather;
