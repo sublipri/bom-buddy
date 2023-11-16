@@ -43,20 +43,18 @@ impl Client {
         debug!("Fetching {url}");
         let mut attemps = 0;
         while attemps < self.retry_limit {
+            let mut retry_delay = self.retry_delay;
             match self.client.get(url).call() {
                 Ok(response) => {
                     return Ok(response);
                 }
                 Err(Error::Status(code, response)) => match code {
                     503 | 429 | 408 => {
-                        let retry = if let Some(header) = response.header("retry-after") {
-                            header.parse()?
-                        } else {
-                            self.retry_delay
-                        };
-                        error!("{} for {}, retry in {}", code, url, retry);
+                        if let Some(header) = response.header("retry-after") {
+                            retry_delay = header.parse()?;
+                        }
+                        error!("{} for {}", code, url);
                         attemps += 1;
-                        sleep(Duration::from_secs(retry));
                     }
                     _ => {
                         let error = response.into_string()?;
@@ -65,15 +63,13 @@ impl Client {
                     }
                 },
                 Err(err) => {
-                    let err = err.into_transport().unwrap();
-                    let error = err.to_string();
-                    error!("{error}");
-                    if let Some(message) = err.message() {
-                        error!("{message}");
-                    }
-                    return Err(anyhow!("{error}"));
+                    let message = err.into_transport().unwrap().to_string();
+                    error!("{message}");
+                    attemps += 1;
                 }
             }
+            debug!("Retrying in {} seconds", retry_delay);
+            sleep(Duration::from_secs(retry_delay));
         }
         Err(anyhow!("Retry limit exceeded"))
     }
