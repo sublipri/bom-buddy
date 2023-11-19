@@ -80,8 +80,15 @@ impl Client {
     }
 
     fn get_json(&self, url: &str) -> Result<serde_json::Value> {
-        let response = self.get(url)?;
-        Ok(response.into_json()?)
+        let string = self.get_string(url)?;
+        let value = match serde_json::from_str(&string) {
+            Ok(json) => json,
+            Err(e) => {
+                debug!("{:?}", &string);
+                return Err(anyhow!("Unable to decode JSON. {e}"));
+            }
+        };
+        Ok(value)
     }
 
     pub fn search(&self, term: &str) -> Result<Vec<SearchResult>> {
