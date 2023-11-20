@@ -1,7 +1,9 @@
 use crate::daily::{DailyForecast, DailyResponse};
 use crate::hourly::{HourlyForecast, HourlyResponse};
 use crate::location::{Location, LocationData, LocationResponse, SearchResponse, SearchResult};
-use crate::observation::{Observation, ObservationResponse};
+use crate::observation::{
+    Observation, ObservationResponse, PastObservationData, PastObservationsResponse,
+};
 use crate::warning::{Warning, WarningResponse};
 use crate::weather::{Weather, WeatherOptions};
 use anyhow::anyhow;
@@ -196,6 +198,16 @@ impl Client {
         let url = format!("{URL_BASE}/{}", &geohash[..6]);
         let response: LocationResponse = serde_json::from_value(self.get_json(&url)?)?;
         Ok(response.data)
+    }
+
+    pub fn get_past_observations(&self, location: &Location) -> Result<Vec<PastObservationData>> {
+        let Some(wmo_id) = location.station.wmo_id else {
+            return Err(anyhow!("{} Doesn't have a WMO ID", location.id));
+        };
+        let code = location.state.get_product_code("60910");
+        let url = format!("https://reg.bom.gov.au/fwo/{code}/{code}.{wmo_id}.json");
+        let response: PastObservationsResponse = serde_json::from_value(self.get_json(&url)?)?;
+        Ok(response.observations.data)
     }
 
     pub fn get_station_list(&self) -> Result<String> {

@@ -87,3 +87,20 @@ pub enum State {
     Nt,
     Wa,
 }
+
+impl State {
+    pub fn get_product_code(&self, id: &str) -> String {
+        let prefix = match self {
+            State::Nt => "IDD",
+            State::Nsw => "IDN",
+            State::Act => "IDN",
+            State::Qld => "IDQ",
+            State::Sa => "IDS",
+            State::Tas => "IDT",
+            State::Vic => "IDV",
+            State::Wa => "IDW",
+        };
+
+        format!("{prefix}{id}")
+    }
+}
