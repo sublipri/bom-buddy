@@ -76,7 +76,7 @@ pub fn cli() -> Result<()> {
 }
 
 fn init(config: &mut Config) -> Result<()> {
-    let client = Client::new();
+    let client = Client::default();
     let mut database = config.get_database()?;
     database.init()?;
     info!("Downloading weather stations");
@@ -96,7 +96,7 @@ fn monitor(config: &Config) -> Result<()> {
     if config.main.locations.is_empty() {
         return Err(anyhow!("No locations specified"));
     }
-    let client = Client::new();
+    let client = Client::default();
     let database = config.get_database()?;
     let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
 
@@ -115,7 +115,7 @@ fn monitor(config: &Config) -> Result<()> {
 }
 
 fn add_location(config: &mut Config) -> Result<()> {
-    let client = Client::new();
+    let client = Client::default();
     let database = config.get_database()?;
     let result = search_for_location(&client)?;
     let location = create_location(result, &client, &database)?;

@@ -6,11 +6,11 @@ use crate::warning::{Warning, WarningResponse};
 use crate::weather::Weather;
 use anyhow::anyhow;
 use anyhow::Result;
+use chrono::Duration;
 use chrono::Utc;
 use std::collections::VecDeque;
 use std::mem::take;
 use std::thread::sleep;
-use std::time::Duration;
 use tracing::{debug, error};
 use ureq::{Agent, AgentBuilder, Error, Response};
 
@@ -19,31 +19,48 @@ const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
 
 #[derive(Debug)]
+pub struct ClientOptions {
+    pub retry_limit: u64,
+    pub retry_delay: Duration,
+    pub timeout: Duration,
+    pub timeout_connect: Duration,
+    pub user_agent: String,
+}
+
+impl Default for ClientOptions {
+    fn default() -> Self {
+        Self {
+            retry_limit: 5,
+            retry_delay: Duration::seconds(7),
+            timeout: Duration::seconds(7),
+            timeout_connect: Duration::seconds(30),
+            user_agent: USER_AGENT.to_string(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Client {
     client: Agent,
-    retry_limit: u64,
-    retry_delay: u64,
+    opts: ClientOptions,
 }
 
 impl Client {
-    pub fn new() -> Client {
+    pub fn new(opts: ClientOptions) -> Client {
         let client = AgentBuilder::new()
-            .timeout_read(Duration::from_secs(5))
-            .timeout_write(Duration::from_secs(5))
-            .user_agent(USER_AGENT)
+            .timeout_read(opts.timeout.to_std().unwrap())
+            .timeout_write(opts.timeout.to_std().unwrap())
+            .timeout_connect(opts.timeout_connect.to_std().unwrap())
+            .user_agent(&opts.user_agent)
             .build();
-        Client {
-            client,
-            retry_limit: 5,
-            retry_delay: 7,
-        }
+        Client { client, opts }
     }
 
     fn get(&self, url: &str) -> Result<Response> {
         debug!("Fetching {url}");
         let mut attemps = 0;
-        while attemps < self.retry_limit {
-            let mut retry_delay = self.retry_delay;
+        while attemps < self.opts.retry_limit {
+            let mut retry_delay = self.opts.retry_delay;
             match self.client.get(url).call() {
                 Ok(response) => {
                     return Ok(response);
@@ -51,7 +68,7 @@ impl Client {
                 Err(Error::Status(code, response)) => match code {
                     503 | 429 | 408 => {
                         if let Some(header) = response.header("retry-after") {
-                            retry_delay = header.parse()?;
+                            retry_delay = Duration::seconds(header.parse()?);
                         }
                         error!("{} for {}", code, url);
                         attemps += 1;
@@ -69,7 +86,7 @@ impl Client {
                 }
             }
             debug!("Retrying in {} seconds", retry_delay);
-            sleep(Duration::from_secs(retry_delay));
+            sleep(retry_delay.to_std()?);
         }
         Err(anyhow!("Retry limit exceeded"))
     }
@@ -190,6 +207,7 @@ impl Client {
 
 impl Default for Client {
     fn default() -> Self {
-        Self::new()
+        let opts = ClientOptions::default();
+        Self::new(opts)
     }
 }
