@@ -3,13 +3,12 @@ use crate::hourly::{HourlyForecast, HourlyResponse};
 use crate::location::{Location, LocationData, LocationResponse, SearchResponse, SearchResult};
 use crate::observation::{Observation, ObservationResponse};
 use crate::warning::{Warning, WarningResponse};
-use crate::weather::Weather;
+use crate::weather::{Weather, WeatherOptions};
 use anyhow::anyhow;
 use anyhow::Result;
 use chrono::Duration;
 use chrono::Utc;
 use std::collections::VecDeque;
-use std::mem::take;
 use std::thread::sleep;
 use tracing::{debug, error};
 use ureq::{Agent, AgentBuilder, Error, Response};
@@ -148,12 +147,48 @@ impl Client {
     }
 
     pub fn get_weather(&self, geohash: &str) -> Result<Weather> {
+        let now = Utc::now();
+        let opts = WeatherOptions::default();
+
+        let daily_forecast = self.get_daily(geohash)?;
+        let mut next_daily_due = if let Some(next) = daily_forecast.next_issue_time {
+            next + opts.update_delay
+        } else {
+            daily_forecast.issue_time + opts.daily_update_frequency + opts.update_delay
+        };
+        if now > next_daily_due {
+            next_daily_due = now + opts.daily_overdue_delay;
+        }
+
+        let hourly_forecast = self.get_hourly(geohash)?;
+        let mut next_hourly_due = hourly_forecast.issue_time + opts.hourly_update_frequency + opts.update_delay;
+        if now > next_hourly_due {
+            next_hourly_due = now + opts.hourly_overdue_delay;
+        }
+
+        let mut observations = VecDeque::new();
+        let observation = self.get_observation(geohash)?;
+        let mut next_observation_due =
+            observation.issue_time + opts.observation_update_frequency + opts.update_delay;
+        if now > next_observation_due {
+            next_observation_due = now + opts.observation_overdue_delay;
+        }
+        observations.push_front(observation);
+
+        let warnings = self.get_warnings(geohash)?;
+        let next_warning_due = now + opts.warning_update_frequency;
+
         Ok(Weather {
-            daily_forecast: self.get_daily(geohash)?,
-            hourly_forecast: self.get_hourly(geohash)?,
-            observation: self.get_observation(geohash)?,
-            past_observations: VecDeque::new(),
-            warnings: self.get_warnings(geohash)?,
+            geohash: geohash.to_string(),
+            observations,
+            daily_forecast,
+            hourly_forecast,
+            warnings,
+            next_observation_due,
+            next_daily_due,
+            next_hourly_due,
+            next_warning_due,
+            opts,
         })
     }
 
@@ -166,42 +201,6 @@ impl Client {
     pub fn get_station_list(&self) -> Result<String> {
         let url = "https://reg.bom.gov.au/climate/data/lists_by_element/stations.txt";
         self.get_string(url)
-    }
-
-    pub fn update_if_due(&self, location: &mut Location) -> Result<bool> {
-        let now = Utc::now();
-        let mut was_updated = false;
-        let weather = &mut location.weather;
-        if now > weather.observation.next_issue_time {
-            let observation = self.get_observation(&location.geohash)?;
-            if observation.issue_time != weather.observation.issue_time {
-                let past = take(&mut weather.observation);
-                weather.observation = observation;
-                weather.past_observations.push_front(past);
-                if weather.past_observations.len() > 72 {
-                    weather.past_observations.pop_back();
-                }
-                was_updated = true;
-            }
-            let warnings = self.get_warnings(&location.geohash)?;
-            if warnings != weather.warnings {
-                was_updated = true;
-            }
-        }
-
-        if now > weather.hourly_forecast.next_issue_time {
-            let hourly = self.get_hourly(&location.geohash)?;
-            weather.hourly_forecast = hourly;
-            was_updated = true;
-        }
-
-        if now > weather.daily_forecast.next_issue_time {
-            let daily = self.get_daily(&location.geohash)?;
-            weather.daily_forecast = daily;
-            was_updated = true;
-        }
-
-        Ok(was_updated)
     }
 }
 

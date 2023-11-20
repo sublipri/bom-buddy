@@ -105,7 +105,7 @@ fn monitor(config: &Config) -> Result<()> {
     }
     loop {
         for location in &mut locations {
-            let was_updated = client.update_if_due(location)?;
+            let was_updated = location.weather.update_if_due(&client)?;
             if was_updated {
                 database.update_weather(location)?;
             }

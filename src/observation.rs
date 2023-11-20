@@ -1,11 +1,10 @@
-use chrono::{prelude::*, Duration};
+use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Observation {
     pub issue_time: DateTime<Utc>,
     pub observation_time: DateTime<Utc>,
-    pub next_issue_time: DateTime<Utc>,
     pub temp: f32,
     pub temp_feels_like: f32,
     pub wind_speed: u8,
@@ -24,16 +23,9 @@ pub struct Observation {
 
 impl From<ObservationResponse> for Observation {
     fn from(response: ObservationResponse) -> Self {
-        let now = Utc::now();
-        let mut next_issue_time = response.metadata.issue_time + Duration::minutes(31);
-        if now > next_issue_time {
-            next_issue_time = now + Duration::minutes(1);
-        }
-
         Observation {
             issue_time: response.metadata.issue_time,
             observation_time: response.metadata.observation_time,
-            next_issue_time,
             temp: response.data.temp,
             temp_feels_like: response.data.temp_feels_like,
             wind_speed: response.data.wind.speed_kilometre,

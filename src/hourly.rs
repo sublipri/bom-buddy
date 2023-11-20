@@ -1,24 +1,17 @@
 use crate::descriptor::IconDescriptor;
-use chrono::{prelude::*, Duration};
+use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct HourlyForecast {
     pub issue_time: DateTime<Utc>,
-    pub next_issue_time: DateTime<Utc>,
     pub data: Vec<HourlyForecastData>,
 }
 
 impl From<HourlyResponse> for HourlyForecast {
     fn from(response: HourlyResponse) -> Self {
-        let now = Utc::now();
-        let mut next_issue_time = response.metadata.issue_time + Duration::minutes(181);
-        if now > next_issue_time {
-            next_issue_time = now + Duration::minutes(5)
-        }
         HourlyForecast {
             issue_time: response.metadata.issue_time,
-            next_issue_time,
             data: response.data,
         }
     }

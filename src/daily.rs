@@ -1,10 +1,10 @@
-use chrono::{prelude::*, Duration};
+use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DailyForecast {
     pub issue_time: DateTime<Utc>,
-    pub next_issue_time: DateTime<Utc>,
+    pub next_issue_time: Option<DateTime<Utc>>,
     pub forecast_region: String,
     pub forecast_type: String,
     pub days: Vec<DailyForecastData>,
@@ -12,14 +12,9 @@ pub struct DailyForecast {
 
 impl From<DailyResponse> for DailyForecast {
     fn from(response: DailyResponse) -> Self {
-        let next_issue_time = if let Some(next) = response.metadata.next_issue_time {
-            next
-        } else {
-            Utc::now() + Duration::hours(1)
-        };
         DailyForecast {
             issue_time: response.metadata.issue_time,
-            next_issue_time,
+            next_issue_time: response.metadata.next_issue_time,
             forecast_region: response.metadata.forecast_region,
             forecast_type: response.metadata.forecast_type,
             days: response.data,
