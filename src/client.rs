@@ -124,7 +124,7 @@ impl Client {
     }
 
     // Search results contain a 7 character geohash but other endpoints expect 6.
-    pub fn get_observation(&self, geohash: &str) -> Result<Observation> {
+    pub fn get_observation(&self, geohash: &str) -> Result<Option<Observation>> {
         let url = format!("{URL_BASE}/{}/observations", &geohash[..6]);
         let response: ObservationResponse = serde_json::from_value(self.get_json(&url)?)?;
         Ok(response.into())
@@ -163,19 +163,22 @@ impl Client {
         }
 
         let hourly_forecast = self.get_hourly(geohash)?;
-        let mut next_hourly_due = hourly_forecast.issue_time + opts.hourly_update_frequency + opts.update_delay;
+        let mut next_hourly_due =
+            hourly_forecast.issue_time + opts.hourly_update_frequency + opts.update_delay;
         if now > next_hourly_due {
             next_hourly_due = now + opts.hourly_overdue_delay;
         }
 
         let mut observations = VecDeque::new();
-        let observation = self.get_observation(geohash)?;
-        let mut next_observation_due =
-            observation.issue_time + opts.observation_update_frequency + opts.update_delay;
-        if now > next_observation_due {
-            next_observation_due = now + opts.observation_overdue_delay;
+        let mut next_observation_due = now + opts.observation_missing_delay;
+        if let Some(observation) = self.get_observation(geohash)? {
+            next_observation_due =
+                observation.issue_time + opts.observation_update_frequency + opts.update_delay;
+            if now > next_observation_due {
+                next_observation_due = now + opts.observation_overdue_delay;
+            }
+            observations.push_front(observation);
         }
-        observations.push_front(observation);
 
         let warnings = self.get_warnings(geohash)?;
         let next_warning_due = now + opts.warning_update_frequency;
@@ -201,8 +204,11 @@ impl Client {
     }
 
     pub fn get_past_observations(&self, location: &Location) -> Result<Vec<PastObservationData>> {
-        let Some(wmo_id) = location.station.wmo_id else {
-            return Err(anyhow!("{} Doesn't have a WMO ID", location.id));
+        let Some(station) = &location.station else {
+            return Err(anyhow!("{} doesn't have a weather station", location.id));
+        };
+        let Some(wmo_id) = station.wmo_id else {
+            return Err(anyhow!("{} doesn't have a WMO ID", station.name));
         };
         let code = location.state.get_product_code("60910");
         let url = format!("https://reg.bom.gov.au/fwo/{code}/{code}.{wmo_id}.json");

@@ -27,6 +27,7 @@ pub struct Weather {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WeatherOptions {
     pub past_observation_amount: usize,
+    pub check_observations: bool,
     /// A delay to account for lag between issue time and appearance in API
     #[serde_as(as = "DurationSeconds<i64>")]
     pub update_delay: Duration,
@@ -34,6 +35,8 @@ pub struct WeatherOptions {
     pub observation_update_frequency: Duration,
     #[serde_as(as = "DurationSeconds<i64>")]
     pub observation_overdue_delay: Duration,
+    #[serde_as(as = "DurationSeconds<i64>")]
+    pub observation_missing_delay: Duration,
     #[serde_as(as = "DurationSeconds<i64>")]
     pub hourly_update_frequency: Duration,
     #[serde_as(as = "DurationSeconds<i64>")]
@@ -51,9 +54,11 @@ impl Default for WeatherOptions {
     fn default() -> Self {
         Self {
             past_observation_amount: 6 * 24 * 2,
+            check_observations: true,
             update_delay: Duration::minutes(2),
             observation_update_frequency: Duration::minutes(10),
             observation_overdue_delay: Duration::minutes(2),
+            observation_missing_delay: Duration::hours(1),
             hourly_update_frequency: Duration::hours(3),
             hourly_overdue_delay: Duration::minutes(30),
             daily_update_frequency: Duration::hours(1),
@@ -71,9 +76,12 @@ impl Weather {
         let now = Utc::now();
         let mut was_updated = false;
 
-        if now > self.next_observation_due {
-            let observation = client.get_observation(&self.geohash)?;
-            was_updated = self.update_observation(now, observation);
+        if self.opts.check_observations && now > self.next_observation_due {
+            if let Some(observation) = client.get_observation(&self.geohash)? {
+                was_updated = self.update_observation(now, observation);
+            } else {
+                self.next_observation_due = now + self.opts.observation_missing_delay;
+            }
         }
 
         if now > self.next_hourly_due {

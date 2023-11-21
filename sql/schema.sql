@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS station (
 CREATE TABLE IF NOT EXISTS location (
     id TEXT PRIMARY KEY,
     geohash TEXT NOT NULL,
-    station_id INTEGER NOT NULL,
+    station_id INTEGER,
     has_wave INTEGER NOT NULL,
     latitude NUMERIC(4,14) NOT NULL,
     longitude NUMERIC(4,14) NOT NULL,

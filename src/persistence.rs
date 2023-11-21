@@ -111,7 +111,7 @@ impl Database {
         stmt.execute(named_params! {
             ":id": location.id,
             ":geohash": location.geohash,
-            ":station_id": location.station.id,
+            ":station_id": location.station.as_ref().map(|s| s.id),
             ":has_wave": location.has_wave,
             ":latitude": location.latitude,
             ":longitude": location.longitude,
@@ -151,8 +151,11 @@ impl Database {
             ));
         };
 
-        let bom_id = row.get(2)?;
-        let station = self.get_station(bom_id).unwrap();
+        let station = if let Some(station_id) = row.get(2)? {
+            Some(self.get_station(station_id)?)
+        } else {
+            None
+        };
         let state_name: String = row.get(8)?;
         let state = State::from_str(&state_name).unwrap();
         let weather_json: String = row.get(12)?;

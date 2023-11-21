@@ -12,7 +12,11 @@ pub fn create_location(
 ) -> Result<Location> {
     let location_data = client.get_location(&result.geohash)?;
     let weather = client.get_weather(&result.geohash)?;
-    let station = database.get_station(weather.observation().unwrap().station.bom_id.parse()?)?;
+    let station = if let Some(obs) = weather.observation() {
+        Some(database.get_station(obs.station.bom_id.parse()?)?)
+    } else {
+        None
+    };
 
     let location = Location {
         geohash: result.geohash,

@@ -7,7 +7,7 @@ use strum_macros::{Display, EnumString};
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Location {
     pub geohash: String,
-    pub station: WeatherStation,
+    pub station: Option<WeatherStation>,
     pub has_wave: bool,
     pub id: String,
     pub latitude: f64,
