@@ -1,5 +1,5 @@
 use crate::persistence::Database;
-use crate::{cli::Cli, location::Location, logging::LogLevel};
+use crate::{cli::Cli, location::Location, logging::LoggingOptions};
 use anyhow::{anyhow, Result};
 use etcetera::{choose_app_strategy, AppStrategy, AppStrategyArgs};
 use figment::providers::{Env, Format, Serialized, Yaml};
@@ -30,14 +30,14 @@ impl Default for Config {
 pub struct MainConfig {
     pub state_dir: PathBuf,
     pub locations: Vec<String>,
-    pub log_level: LogLevel,
+    pub logging: LoggingOptions,
 }
 
 impl Default for MainConfig {
     fn default() -> Self {
         Self {
             state_dir: Config::default_dirs().state.clone(),
-            log_level: LogLevel::Info,
+            logging: LoggingOptions::default(),
             locations: Vec::new(),
         }
     }

@@ -56,15 +56,14 @@ enum Commands {
 pub fn cli() -> Result<()> {
     let args = Cli::parse();
 
-    if let Some(level) = args.log_level {
-        setup_logging(level);
-    }
-    debug!("Command line arguments: {:#?}", &args);
     let mut config = Config::from_cli(&args)?;
-    debug!("Config: {:#?}", config);
-    if args.log_level.is_none() {
-        setup_logging(config.main.log_level);
+    if let Some(level) = args.log_level {
+        config.main.logging.console_level = level;
+        config.main.logging.file_level = level;
     }
+    let _guard = setup_logging(&config.main.logging);
+    debug!("Command line arguments: {:#?}", &args);
+    debug!("Config: {:#?}", &config);
 
     match &args.command {
         Some(Commands::Init) => init(&mut config)?,
