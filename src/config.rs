@@ -55,7 +55,7 @@ impl Config {
 
         let main = Figment::from(Serialized::defaults(MainConfig::default()))
             .merge(Yaml::file(&config_path))
-            .merge(Env::prefixed("BOM"))
+            .merge(Env::prefixed("BOM_"))
             .extract()?;
 
         Ok(Self { config_path, main })
@@ -93,7 +93,7 @@ impl Config {
 
         let main = Figment::from(Serialized::defaults(MainConfig::default()))
             .merge(Yaml::file(&config_path))
-            .merge(Env::prefixed("BOM"))
+            .merge(Env::prefixed("BOM_"))
             .merge(Serialized::defaults(args))
             .extract()?;
 
