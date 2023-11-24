@@ -86,7 +86,7 @@ impl Config {
 
     pub fn from_cli(args: &Cli) -> Result<Self> {
         let config_path = if let Some(path) = &args.config_path {
-            path.canonicalize()?.to_owned()
+            path.to_owned()
         } else {
             Self::default_path().to_owned()
         };
