@@ -28,8 +28,8 @@ pub struct DailyForecastData {
     pub uv: Uv,
     pub astronomical: Astronomical,
     pub date: DateTime<Utc>,
-    pub temp_max: u8,
-    pub temp_min: Option<u8>,
+    pub temp_max: f32,
+    pub temp_min: Option<f32>,
     pub extended_text: Option<String>,
     pub icon_descriptor: String,
     pub short_text: Option<String>,
@@ -59,8 +59,8 @@ pub struct Now {
     pub is_night: bool,
     pub now_label: String,
     pub later_label: String,
-    pub temp_now: i8,
-    pub temp_later: i8,
+    pub temp_now: f32,
+    pub temp_later: f32,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
