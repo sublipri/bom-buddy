@@ -5,7 +5,11 @@ use crate::logging::{setup_logging, LogLevel};
 use crate::services::{create_location, ids_to_locations, update_if_due};
 use crate::station::StationsTable;
 use anyhow::{anyhow, Result};
+use chrono::{Local, Utc};
 use clap::{Parser, Subcommand};
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::*;
 use inquire::{Select, Text};
 use serde::{Deserialize, Serialize};
 use std::io::IsTerminal;
@@ -52,6 +56,8 @@ enum Commands {
     Monitor,
     /// Search for a location and save it in the config file
     AddLocation,
+    /// Print the 7-day forecast
+    Daily(DailyArgs),
     /// Print the current weather
     Current {
         /// Check for updates before printing
@@ -79,6 +85,7 @@ pub fn cli() -> Result<()> {
         Some(Commands::Init) => init(&mut config)?,
         Some(Commands::Monitor) => monitor(&config)?,
         Some(Commands::AddLocation) => add_location(&mut config)?,
+        Some(Commands::Daily(args)) => print_daily(&config, args)?,
         Some(Commands::Current { check, fstring }) => print_current(&config, *check, fstring)?,
         None => {}
     }
@@ -171,6 +178,96 @@ fn print_current(config: &Config, check: bool, fstring: &Option<String>) -> Resu
         } else {
             print!("{output}");
         }
+    }
+    Ok(())
+}
+
+#[derive(Parser, Debug, Serialize, Deserialize)]
+pub struct DailyArgs {
+    /// Check for updates if due
+    #[arg(short, long)]
+    check: bool,
+    /// Force an update even if a new forecast isn't due
+    #[arg(short, long)]
+    force_check: bool,
+    /// Show the extended description for each day's forecast
+    #[arg(short, long)]
+    extended: bool,
+}
+
+fn print_daily(config: &Config, args: &DailyArgs) -> Result<()> {
+    if config.main.locations.is_empty() {
+        return Err(anyhow!("No locations specified"));
+    }
+    let client = Client::default();
+    let database = config.get_database()?;
+    let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
+
+    if args.force_check {
+        for location in &mut locations {
+            let new_daily = client.get_daily(&location.geohash)?;
+            let was_updated = location.weather.update_daily(Utc::now(), new_daily);
+            if was_updated {
+                database.update_weather(location)?;
+            }
+        }
+    } else if args.check {
+        update_if_due(&mut locations, &client, &database)?;
+    }
+
+    for location in locations {
+        let mut table = Table::new();
+
+        let issued = location
+            .weather
+            .daily_forecast
+            .issue_time
+            .with_timezone(&Local)
+            .format("%r");
+
+        let header = format!("Forecast for {} issued at {}", location, issued);
+        println!("{header}");
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_header(vec!["Day", "Min", "Max", "Rain", "Chance", "Description"]);
+
+        for day in &location.weather.daily_forecast.days {
+            let date = day
+                .date
+                .with_timezone(&Local)
+                .format("%a %d %b")
+                .to_string();
+
+            let max = day.temp_max.to_string();
+            let min = day.temp_min.map_or("".to_string(), |t| t.to_string());
+            let description = if args.extended {
+                day.extended_text.clone().unwrap_or(String::new())
+            } else {
+                day.short_text.clone().unwrap_or(String::new())
+            };
+
+            let rain = if let Some(max) = day.rain.amount.max {
+                format!(
+                    "{}-{}{}",
+                    day.rain.amount.lower_range, max, day.rain.amount.units
+                )
+            } else {
+                "0mm".to_string()
+            };
+            let chance = format!("{}%", day.rain.chance);
+
+            table.add_row(vec![
+                Cell::new(&date),
+                Cell::new(&min),
+                Cell::new(&max),
+                Cell::new(&rain),
+                Cell::new(&chance),
+                Cell::new(&description),
+            ]);
+        }
+        println!("{table}");
     }
     Ok(())
 }

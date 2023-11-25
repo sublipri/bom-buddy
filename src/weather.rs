@@ -107,7 +107,7 @@ impl Weather {
         Ok(was_updated)
     }
 
-    fn update_observation(&mut self, now: DateTime<Utc>, observation: Observation) -> bool {
+    pub fn update_observation(&mut self, now: DateTime<Utc>, observation: Observation) -> bool {
         if let Some(last) = self.observation() {
             if observation.issue_time == last.issue_time {
                 debug!(
@@ -135,7 +135,7 @@ impl Weather {
         true
     }
 
-    fn update_hourly(&mut self, now: DateTime<Utc>, hourly: HourlyForecast) -> bool {
+    pub fn update_hourly(&mut self, now: DateTime<Utc>, hourly: HourlyForecast) -> bool {
         let last = &self.hourly_forecast;
         if hourly.issue_time == last.issue_time {
             debug!(
@@ -153,7 +153,7 @@ impl Weather {
         true
     }
 
-    fn update_daily(&mut self, now: DateTime<Utc>, new_daily: DailyForecast) -> bool {
+    pub fn update_daily(&mut self, now: DateTime<Utc>, new_daily: DailyForecast) -> bool {
         let last = &self.daily_forecast;
         if new_daily.issue_time == last.issue_time {
             debug!(

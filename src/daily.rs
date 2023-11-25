@@ -1,3 +1,4 @@
+use crate::descriptor::IconDescriptor;
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -31,7 +32,7 @@ pub struct DailyForecastData {
     pub temp_max: f32,
     pub temp_min: Option<f32>,
     pub extended_text: Option<String>,
-    pub icon_descriptor: String,
+    pub icon_descriptor: IconDescriptor,
     pub short_text: Option<String>,
     pub surf_danger: Option<String>,
     pub fire_danger: Option<String>,
