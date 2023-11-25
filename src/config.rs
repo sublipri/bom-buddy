@@ -31,6 +31,7 @@ pub struct MainConfig {
     pub state_dir: PathBuf,
     pub locations: Vec<String>,
     pub logging: LoggingOptions,
+    pub current_fstring: String,
 }
 
 impl Default for MainConfig {
@@ -39,6 +40,7 @@ impl Default for MainConfig {
             state_dir: Config::default_dirs().state.clone(),
             logging: LoggingOptions::default(),
             locations: Vec::new(),
+            current_fstring: "{icon} {temp} ({temp_feels_like})".to_string(),
         }
     }
 }

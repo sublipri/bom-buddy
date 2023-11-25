@@ -80,3 +80,17 @@ pub fn ids_to_locations(
     }
     Ok(locations)
 }
+
+pub fn update_if_due(
+    locations: &mut Vec<Location>,
+    client: &Client,
+    database: &Database,
+) -> Result<()> {
+    for location in locations {
+        let was_updated = location.weather.update_if_due(client)?;
+        if was_updated {
+            database.update_weather(location)?;
+        }
+    }
+    Ok(())
+}

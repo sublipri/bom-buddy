@@ -1,9 +1,11 @@
 use crate::client::Client;
+use crate::daily::DailyForecast;
+use crate::descriptor::IconDescriptor;
 use crate::hourly::HourlyForecast;
 use crate::observation::Observation;
 use crate::warning::Warning;
-use anyhow::Result;
-use chrono::{DateTime, Duration, Utc};
+use anyhow::{anyhow, Result};
+use chrono::{DateTime, Duration, Local, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::DurationSeconds;
 use std::collections::VecDeque;
@@ -170,5 +172,174 @@ impl Weather {
         };
         self.daily_forecast = new_daily;
         true
+    }
+
+    pub fn current(&self) -> CurrentWeather {
+        let now = Utc::now();
+        let observation = self.observation();
+        let hourly = self
+            .hourly_forecast
+            .data
+            .iter()
+            .find(|h| now > h.time)
+            .unwrap();
+        let mut days = self.daily_forecast.days.iter();
+        let today = days.next().unwrap();
+        let tomorrow = days.next().unwrap();
+
+        let (temp, temp_feels_like, max_temp, wind_speed, wind_direction, gust) =
+            if let Some(obs) = observation {
+                (
+                    obs.temp,
+                    obs.temp_feels_like,
+                    f32::max(obs.max_temp.value, today.temp_max),
+                    obs.wind.speed_kilometre,
+                    &obs.wind.direction,
+                    obs.gust.speed_kilometre,
+                )
+            } else {
+                (
+                    hourly.temp,
+                    hourly.temp_feels_like,
+                    today.temp_max,
+                    hourly.wind.speed_kilometre,
+                    &hourly.wind.direction,
+                    hourly.wind.gust_speed_kilometre,
+                )
+            };
+
+        let overnight_min = tomorrow.temp_min.unwrap();
+        let tomorrow_max = tomorrow.temp_max;
+
+        let current_time = now.with_timezone(&Local).time();
+        let start = NaiveTime::from_hms_opt(6, 0, 0).unwrap();
+        let end = NaiveTime::from_hms_opt(18, 0, 0).unwrap();
+        let next_is_max = current_time > start && current_time < end;
+
+        let (next_temp, next_label, later_temp, later_label) = if next_is_max {
+            (max_temp, "Max", overnight_min, "Overnight min")
+        } else {
+            (overnight_min, "Overnight min", tomorrow_max, "Tomorrow max")
+        };
+
+        CurrentWeather {
+            temp,
+            temp_feels_like,
+            max_temp,
+            next_temp,
+            next_label,
+            later_temp,
+            later_label,
+            overnight_min, // TODO: check what happens after midnight
+            tomorrow_max,
+            rain_since_9am: observation.as_ref().map(|obs| obs.rain_since_9am),
+            extended_text: &today.extended_text,
+            short_text: &today.short_text,
+            humidity: observation.as_ref().map(|obs| obs.humidity),
+            hourly_rain_chance: hourly.rain.chance,
+            hourly_rain_min: hourly.rain.amount.min,
+            hourly_rain_max: hourly.rain.amount.max.unwrap_or(0),
+            today_rain_chance: today.rain.chance,
+            today_rain_min: today.rain.amount.min,
+            today_rain_max: today.rain.amount.max.unwrap_or(0),
+            wind_speed,
+            wind_direction,
+            gust,
+            relative_humidity: hourly.relative_humidity,
+            uv: hourly.uv,
+            icon: hourly.icon_descriptor.get_icon_emoji(hourly.is_night),
+            icon_descriptor: &hourly.icon_descriptor,
+            is_night: hourly.is_night,
+        }
+    }
+}
+
+pub struct CurrentWeather<'a> {
+    pub temp: f32,
+    pub temp_feels_like: f32,
+    pub max_temp: f32,
+    pub next_temp: f32,
+    pub later_temp: f32,
+    pub next_label: &'a str,
+    pub later_label: &'a str,
+    pub overnight_min: f32,
+    pub tomorrow_max: f32,
+    pub rain_since_9am: Option<f32>,
+    pub today_rain_chance: u8,
+    pub today_rain_min: u16,
+    pub today_rain_max: u16,
+    pub hourly_rain_chance: u8,
+    pub hourly_rain_min: u16,
+    pub hourly_rain_max: u16,
+    pub humidity: Option<u8>,
+    pub relative_humidity: u8,
+    pub uv: u8,
+    pub icon: &'a str,
+    pub short_text: &'a Option<String>,
+    pub extended_text: &'a Option<String>,
+    pub icon_descriptor: &'a IconDescriptor,
+    pub is_night: bool,
+    pub wind_speed: u8,
+    pub wind_direction: &'a str,
+    pub gust: u8,
+}
+
+impl<'a> CurrentWeather<'a> {
+    /// Process a user-provided format string e.g. "{icon} {temp} ({temp_feels_like})".
+    /// Just a basic implementation that doesn't handle mismatched curly brackets
+    pub fn process_fstring(&self, fstring: &str) -> Result<String> {
+        let mut pos = 0;
+        let mut remainder = fstring;
+        let mut output = String::new();
+        while !remainder.is_empty() {
+            if let Some(next) = remainder.find('{') {
+                output.push_str(&remainder[..next]);
+                let start = next + 1;
+                let Some(end) = remainder.find('}') else {
+                    return Err(anyhow!("{fstring} is not a valid format string"));
+                };
+                let key = &remainder[start..end];
+                self.push_value(key, &mut output)?;
+                pos = pos + end + 1;
+                remainder = &fstring[pos..];
+            } else {
+                output.push_str(remainder);
+                break;
+            }
+        }
+
+        Ok(output)
+    }
+
+    fn push_value(&self, key: &'a str, output: &mut String) -> Result<()> {
+        match key {
+            "temp" => output.push_str(&self.temp.to_string()),
+            "temp_feels_like" => output.push_str(&self.temp_feels_like.to_string()),
+            "icon" => output.push_str(self.icon),
+            "next_temp" => output.push_str(&self.next_temp.to_string()),
+            "next_label" => output.push_str(self.next_label),
+            "later_temp" => output.push_str(&self.later_temp.to_string()),
+            "later_label" => output.push_str(self.later_label),
+            "max_temp" => output.push_str(&self.max_temp.to_string()),
+            "overnight_min" => output.push_str(&self.overnight_min.to_string()),
+            "tomorrow_max" => output.push_str(&self.tomorrow_max.to_string()),
+            "rain_since_9am" => output.push_str(&self.rain_since_9am.unwrap_or(0.0).to_string()),
+            "hourly_rain_chance" => output.push_str(&self.hourly_rain_chance.to_string()),
+            "hourly_rain_min" => output.push_str(&self.hourly_rain_min.to_string()),
+            "hourly_rain_max" => output.push_str(&self.hourly_rain_max.to_string()),
+            "today_rain_chance" => output.push_str(&self.today_rain_chance.to_string()),
+            "today_rain_min" => output.push_str(&self.today_rain_min.to_string()),
+            "today_rain_max" => output.push_str(&self.today_rain_max.to_string()),
+            "short_text" => output.push_str(self.short_text.as_ref().unwrap_or(&String::new())),
+            "extended_text" => {
+                output.push_str(self.extended_text.as_ref().unwrap_or(&String::new()))
+            }
+            "wind_speed" => output.push_str(&self.wind_speed.to_string()),
+            "wind_direction" => output.push_str(self.wind_direction),
+            "gust" => output.push_str(&self.gust.to_string()),
+            _ => return Err(anyhow!("{} is not a valid key", key)),
+        }
+
+        Ok(())
     }
 }

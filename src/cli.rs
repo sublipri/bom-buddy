@@ -2,12 +2,13 @@ use crate::client::Client;
 use crate::config::Config;
 use crate::location::SearchResult;
 use crate::logging::{setup_logging, LogLevel};
-use crate::services::{create_location, ids_to_locations};
+use crate::services::{create_location, ids_to_locations, update_if_due};
 use crate::station::StationsTable;
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use inquire::{Select, Text};
 use serde::{Deserialize, Serialize};
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
@@ -51,6 +52,15 @@ enum Commands {
     Monitor,
     /// Search for a location and save it in the config file
     AddLocation,
+    /// Print the current weather
+    Current {
+        /// Check for updates before printing
+        #[arg(short, long)]
+        check: bool,
+        /// Custom format string
+        #[arg(short, long)]
+        fstring: Option<String>,
+    },
 }
 
 pub fn cli() -> Result<()> {
@@ -69,6 +79,7 @@ pub fn cli() -> Result<()> {
         Some(Commands::Init) => init(&mut config)?,
         Some(Commands::Monitor) => monitor(&config)?,
         Some(Commands::AddLocation) => add_location(&mut config)?,
+        Some(Commands::Current { check, fstring }) => print_current(&config, *check, fstring)?,
         None => {}
     }
     Ok(())
@@ -103,12 +114,7 @@ fn monitor(config: &Config) -> Result<()> {
         info!("Monitoring weather for {}", location.id);
     }
     loop {
-        for location in &mut locations {
-            let was_updated = location.weather.update_if_due(&client)?;
-            if was_updated {
-                database.update_weather(location)?;
-            }
-        }
+        update_if_due(&mut locations, &client, &database)?;
         sleep(Duration::from_secs(1));
     }
 }
@@ -144,4 +150,27 @@ fn search_for_location(client: &Client) -> Result<SearchResult> {
         };
         return Ok(selection);
     }
+}
+
+fn print_current(config: &Config, check: bool, fstring: &Option<String>) -> Result<()> {
+    if config.main.locations.is_empty() {
+        return Err(anyhow!("No locations specified"));
+    }
+    let client = Client::default();
+    let database = config.get_database()?;
+    let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
+    if check {
+        update_if_due(&mut locations, &client, &database)?
+    }
+    let fstring = fstring.as_ref().unwrap_or(&config.main.current_fstring);
+    for location in locations {
+        let current = location.weather.current();
+        let output = current.process_fstring(fstring)?;
+        if std::io::stdout().is_terminal() {
+            println!("{output}");
+        } else {
+            print!("{output}");
+        }
+    }
+    Ok(())
 }
