@@ -59,14 +59,7 @@ enum Commands {
     /// Print the 7-day forecast
     Daily(DailyArgs),
     /// Print the current weather
-    Current {
-        /// Check for updates before printing
-        #[arg(short, long)]
-        check: bool,
-        /// Custom format string
-        #[arg(short, long)]
-        fstring: Option<String>,
-    },
+    Current(CurrentArgs),
 }
 
 pub fn cli() -> Result<()> {
@@ -86,7 +79,7 @@ pub fn cli() -> Result<()> {
         Some(Commands::Monitor) => monitor(&config)?,
         Some(Commands::AddLocation) => add_location(&mut config)?,
         Some(Commands::Daily(args)) => print_daily(&config, args)?,
-        Some(Commands::Current { check, fstring }) => print_current(&config, *check, fstring)?,
+        Some(Commands::Current(args)) => print_current(&config, args)?,
         None => {}
     }
     Ok(())
@@ -159,17 +152,30 @@ fn search_for_location(client: &Client) -> Result<SearchResult> {
     }
 }
 
-fn print_current(config: &Config, check: bool, fstring: &Option<String>) -> Result<()> {
+#[derive(Parser, Debug, Serialize, Deserialize)]
+pub struct CurrentArgs {
+    /// Check for updates if due
+    #[arg(short, long)]
+    check: bool,
+    /// Custom format string
+    #[arg(short, long)]
+    fstring: Option<String>,
+}
+
+fn print_current(config: &Config, args: &CurrentArgs) -> Result<()> {
     if config.main.locations.is_empty() {
         return Err(anyhow!("No locations specified"));
     }
     let client = Client::default();
     let database = config.get_database()?;
     let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
-    if check {
+    if args.check {
         update_if_due(&mut locations, &client, &database)?
     }
-    let fstring = fstring.as_ref().unwrap_or(&config.main.current_fstring);
+    let fstring = args
+        .fstring
+        .as_ref()
+        .unwrap_or(&config.main.current_fstring);
     for location in locations {
         let current = location.weather.current();
         let output = current.process_fstring(fstring)?;
