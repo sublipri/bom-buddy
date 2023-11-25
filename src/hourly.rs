@@ -55,8 +55,8 @@ pub struct HourlyForecastRain {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct HourlyForecastRainAmount {
-    pub max: Option<u32>,
-    pub min: u32,
+    pub max: Option<u16>,
+    pub min: u16,
     pub units: String,
 }
 
