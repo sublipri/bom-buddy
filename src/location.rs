@@ -1,7 +1,7 @@
 use crate::station::WeatherStation;
 use crate::weather::Weather;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::fmt::{self, Display};
 use strum_macros::{Display, EnumString};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -19,6 +19,12 @@ pub struct Location {
     pub tidal_point: Option<String>,
     pub timezone: String,
     pub weather: Weather,
+}
+
+impl Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {} {}", self.name, self.state, self.postcode)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
