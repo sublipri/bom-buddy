@@ -86,7 +86,7 @@ impl Client {
                     attemps += 1;
                 }
             }
-            debug!("Retrying in {} seconds", retry_delay);
+            debug!("Retrying in {} seconds", retry_delay.num_seconds());
             sleep(retry_delay.to_std()?);
         }
         Err(anyhow!("Retry limit exceeded"))
