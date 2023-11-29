@@ -54,29 +54,6 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert_station(&self, station: &WeatherStation) -> Result<()> {
-        let mut stmt = self
-            .conn
-            .prepare_cached(include_str!("../sql/insert_station.sql"))?;
-
-        stmt.execute(named_params! {
-            ":id": station.id,
-            ":district_id": station.district_id,
-            ":name": station.name,
-            ":start": station.start,
-            ":end": station.end,
-            ":latitude": station.latitude,
-            ":longitude": station.longitude,
-            ":source": station.source,
-            ":state": station.state,
-            ":height": station.height,
-            ":barometric_height": station.barometric_height,
-            ":wmo_id": station.wmo_id,
-        })?;
-
-        Ok(())
-    }
-
     pub fn get_station(&self, bom_id: u32) -> Result<WeatherStation> {
         let mut stmt = self.conn.prepare("SELECT * FROM station WHERE id = (?)")?;
         let mut binding = stmt.query(params![bom_id])?;
