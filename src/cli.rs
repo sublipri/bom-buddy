@@ -12,6 +12,7 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::*;
 use inquire::{Select, Text};
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
@@ -22,34 +23,31 @@ fn default(path: &Path) -> String {
     format!("[default: {}]", path.as_os_str().to_string_lossy())
 }
 /// Australian weather tool
+#[skip_serializing_none]
 #[derive(Parser, Debug, Serialize, Deserialize)]
 #[command(version, about, long_about = None)]
 pub struct Cli {
     #[arg(short, long, value_name = "DIR", help = default(&Config::default_dirs().state)) ]
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub state_dir: Option<PathBuf>,
 
     #[arg(short, long = "config", value_name = "FILE", help = default(&Config::default_path()))]
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub config_path: Option<PathBuf>,
 
     /// [default: info]
     #[arg(short, long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    log_level: Option<LogLevel>,
+    pub log_level: Option<LogLevel>,
 
     /// Suburb followed by geohash e.g. Canberra-r3dp5hh (overrides config)
     #[arg(short = 'i', long = "location-id", value_name = "ID")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    locations: Option<Vec<String>>,
+    pub locations: Option<Vec<String>>,
 
     #[command(subcommand)]
     #[serde(skip)]
-    command: Option<Commands>,
+    pub command: Option<Commands>,
 }
 
 #[derive(Debug, Subcommand)]
-enum Commands {
+pub enum Commands {
     /// Initialize the database and setup your location
     Init,
     /// Run continuously and check the weather when an update is due.
