@@ -40,7 +40,7 @@ impl Default for MainConfig {
             state_dir: Config::default_dirs().state.clone(),
             logging: LoggingOptions::default(),
             locations: Vec::new(),
-            current_fstring: "{icon} {temp} ({temp_feels_like})".to_string(),
+            current_fstring: "{icon} {temp} ({next_temp})".to_string(),
         }
     }
 }
