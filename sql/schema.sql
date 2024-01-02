@@ -29,3 +29,39 @@ CREATE TABLE IF NOT EXISTS location (
     weather TEXT NOT NULL,
 	FOREIGN KEY(station_id) REFERENCES station(id)
 );
+
+CREATE TABLE IF NOT EXISTS radar (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    latitude NUMERIC(4,3) NOT NULL,
+    longitude NUMERIC(4,3) NOT NULL,
+    state TEXT NOT NULL,
+    type_ TEXT NOT NULL,
+    group_ INT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS radar_legend (
+    id TEXT PRIMARY KEY,
+    image BLOB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS radar_data_layer (
+    id INTEGER PRIMARY KEY,
+    image BLOB NOT NULL,
+    radar_id INT NOT NULL,
+    radar_type_id INT NOT NULL,
+    timestamp INT NOT NULL,
+    filename TEXT NOT NULL UNIQUE,
+    FOREIGN KEY(radar_id) REFERENCES radar(id)
+);
+
+CREATE TABLE IF NOT EXISTS radar_feature_layer (
+    id INTEGER PRIMARY KEY,
+    image BLOB NOT NULL,
+    radar_id INT NOT NULL,
+    feature TEXT NOT NULL,
+    radar_type_id INT NOT NULL,
+    filename TEXT NOT NULL UNIQUE,
+    FOREIGN KEY(radar_id) REFERENCES radar(id)
+);

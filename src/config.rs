@@ -1,5 +1,7 @@
+use crate::cli::{Cli, Commands};
 use crate::persistence::Database;
-use crate::{cli::Cli, location::Location, logging::LoggingOptions};
+use crate::radar::{Radar, RadarId, RadarImageOptions};
+use crate::{location::Location, logging::LoggingOptions};
 use anyhow::{anyhow, Result};
 use etcetera::{choose_app_strategy, AppStrategy, AppStrategyArgs};
 use figment::providers::{Env, Format, Serialized, Yaml};
@@ -31,7 +33,15 @@ pub struct MainConfig {
     pub state_dir: PathBuf,
     pub locations: Vec<String>,
     pub logging: LoggingOptions,
+    pub radars: Vec<RadarConfig>,
     pub current_fstring: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RadarConfig {
+    pub id: RadarId,
+    pub name: String,
+    pub opts: RadarImageOptions,
 }
 
 impl Default for MainConfig {
@@ -39,6 +49,7 @@ impl Default for MainConfig {
         Self {
             state_dir: Config::default_dirs().state.clone(),
             logging: LoggingOptions::default(),
+            radars: Vec::new(),
             locations: Vec::new(),
             current_fstring: "{icon} {temp} ({next_temp})".to_string(),
         }
@@ -96,8 +107,19 @@ impl Config {
         let main = Figment::from(Serialized::defaults(MainConfig::default()))
             .merge(Yaml::file(&config_path))
             .merge(Env::prefixed("BOM_"))
-            .merge(Serialized::defaults(args))
-            .extract()?;
+            .merge(Serialized::defaults(args));
+
+        let main = match &args.command {
+            Some(Commands::Radar(rargs)) => {
+                let arg_opts = serde_json::to_value(rargs)?;
+                let mut radar_array: serde_json::Value = main.extract_inner("radars")?;
+                override_array_opts(&mut radar_array, &arg_opts);
+                main.merge(("radars", radar_array))
+            }
+            _ => main,
+        };
+
+        let main = main.extract()?;
 
         Ok(Config { config_path, main })
     }
@@ -127,6 +149,26 @@ impl Config {
         self.write_config_file()?;
         Ok(())
     }
+
+    pub fn add_radar(&mut self, radar: &Radar) -> Result<()> {
+        let radar_config = RadarConfig {
+            id: radar.id,
+            name: radar.full_name.clone(),
+            opts: RadarImageOptions {
+                image_dir: self.main.state_dir.clone(),
+                ..Default::default()
+            },
+        };
+        info!(
+            "Adding radar {} {} to {}",
+            radar_config.id,
+            &radar_config.name,
+            self.config_path.display()
+        );
+        self.main.radars.push(radar_config);
+        self.write_config_file()?;
+        Ok(())
+    }
 }
 
 static DEFAULT_DIRS: OnceCell<DefaultDirs> = OnceCell::new();
@@ -139,4 +181,23 @@ pub struct DefaultDirs {
     pub data: PathBuf,
     pub state: PathBuf,
     pub run: PathBuf,
+}
+
+// A hacky way to allow different radars to have different options in the config file
+// that are still overwritten by CLI arguments
+fn override_array_opts(config_array: &mut serde_json::Value, arg_opts: &serde_json::Value) {
+    let config_array = config_array.as_array_mut().unwrap();
+    for element in &mut *config_array {
+        let Some(conf_opts) = element.get_mut("opts") else {
+            continue;
+        };
+        let Some(conf_opts) = conf_opts.as_object_mut() else {
+            continue;
+        };
+        for (key, arg_value) in arg_opts.as_object().unwrap() {
+            if let Some(conf_value) = conf_opts.get_mut(key) {
+                *conf_value = arg_value.clone();
+            }
+        }
+    }
 }

@@ -1,11 +1,17 @@
 use crate::client::Client;
 use crate::config::Config;
+use crate::ftp::FtpClient;
 use crate::location::SearchResult;
 use crate::logging::{setup_logging, LogLevel};
-use crate::services::{create_location, ids_to_locations, update_if_due};
+use crate::persistence::Database;
+use crate::radar::{
+    get_radar_image_managers, update_radar_images, Radar, RadarImageFeature, RadarImageManager,
+    RadarType,
+};
+use crate::services::{create_location, get_nearby_radars, ids_to_locations, update_if_due};
 use crate::station::StationsTable;
 use anyhow::{anyhow, Result};
-use chrono::{Local, Utc};
+use chrono::{Duration, Local, Utc};
 use clap::{Parser, Subcommand};
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
@@ -16,7 +22,6 @@ use serde_with::skip_serializing_none;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
-use std::time::Duration;
 use tracing::{debug, error, info};
 
 fn default(path: &Path) -> String {
@@ -58,6 +63,8 @@ pub enum Commands {
     Daily(DailyArgs),
     /// Print the current weather
     Current(CurrentArgs),
+    /// Download and view radar images
+    Radar(RadarArgs),
 }
 
 pub fn cli() -> Result<()> {
@@ -78,6 +85,7 @@ pub fn cli() -> Result<()> {
         Some(Commands::AddLocation) => add_location(&mut config)?,
         Some(Commands::Daily(args)) => print_daily(&config, args)?,
         Some(Commands::Current(args)) => print_current(&config, args)?,
+        Some(Commands::Radar(args)) => radar(&config, args.monitor)?,
         None => {}
     }
     Ok(())
@@ -85,18 +93,34 @@ pub fn cli() -> Result<()> {
 
 fn init(config: &mut Config) -> Result<()> {
     let client = Client::default();
-    let mut database = config.get_database()?;
-    database.init()?;
+    let mut db = config.get_database()?;
+    db.init()?;
     info!("Downloading weather stations");
     let stations = client.get_station_list()?;
     info!("Inserting weather stations into database");
     let stations = StationsTable::new(&stations);
     // Skip discontinued stations and those in Antarctica
     let stations = stations.filter(|s| s.end.is_none() && s.state != "ANT");
-    database.insert_stations(stations)?;
+    db.insert_stations(stations)?;
+    let mut ftp = FtpClient::new()?;
+    info!("Downloading radar data");
+    let all_radars: Vec<Radar> = ftp.get_public_radars()?.collect();
+    let legends = ftp.get_radar_legends()?;
+    info!("Inserting radars into database");
+    db.insert_radars(&all_radars, &legends)?;
     let result = search_for_location(&client)?;
-    let location = create_location(result, &client, &database)?;
+    let location = create_location(result, &client, &db)?;
     config.add_location(&location)?;
+    let nearby_radars = get_nearby_radars(&location, &all_radars);
+    let radar_id = if nearby_radars.len() == 1 {
+        info!("Selecting only nearby radar {}", nearby_radars[0]);
+        nearby_radars[0].id
+    } else {
+        let selection = Select::new("Select a Radar", nearby_radars).prompt()?;
+        selection.id
+    };
+    let radar = all_radars.iter().find(|r| r.id == radar_id).unwrap();
+    config.add_radar(radar)?;
     Ok(())
 }
 
@@ -113,7 +137,7 @@ fn monitor(config: &Config) -> Result<()> {
     }
     loop {
         update_if_due(&mut locations, &client, &database)?;
-        sleep(Duration::from_secs(1));
+        sleep(Duration::seconds(1).to_std().unwrap());
     }
 }
 
@@ -272,6 +296,103 @@ fn print_daily(config: &Config, args: &DailyArgs) -> Result<()> {
             ]);
         }
         println!("{table}");
+    }
+    Ok(())
+}
+
+#[skip_serializing_none]
+#[derive(Parser, Debug, Deserialize, Serialize)]
+pub struct RadarArgs {
+    /// Can be specified multiple times
+    #[arg(short = 'F', long = "feature")]
+    pub features: Option<Vec<RadarImageFeature>>,
+    /// Can be specified multiple times
+    #[arg(short, long = "radar-type")]
+    pub radar_types: Option<Vec<RadarType>>,
+    /// Remove the header at the top of each image
+    #[arg(short = 'R', long)]
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub remove_header: bool,
+    /// Re-generate images that already exist
+    #[arg(short = 'f', long)]
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub force: bool,
+    /// Create PNG files for each radar image
+    #[arg(short = 'p', long)]
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub create_png: bool,
+    /// Combine all images into an animated PNG file
+    #[arg(short = 'a', long)]
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub create_apng: bool,
+    /// View the images as a loop in MPV
+    #[arg(short = 'v', long)]
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub open_mpv: bool,
+    /// Time between each frame in milliseconds (applies to APNG and MPV)
+    #[arg(short = 'd', long = "frame-delay")]
+    pub frame_delay_ms: Option<u16>,
+    /// Maximum amount of frames to create
+    #[arg(short, long)]
+    pub max_frames: Option<u64>,
+    /// Output directory for image files
+    #[arg(short = 'o', long, value_name = "DIRECTORY")]
+    pub image_dir: Option<PathBuf>,
+    /// Run continuously and fetch new radar images when available
+    #[serde(skip)]
+    #[arg(short = 'M', long)]
+    pub monitor: bool,
+}
+
+fn radar(config: &Config, monitor: bool) -> Result<()> {
+    let mut db = config.get_database()?;
+    let mut ftp = FtpClient::new()?;
+    let mut managers = Vec::new();
+    for radar in &config.main.radars {
+        managers.extend(get_radar_image_managers(
+            radar.id,
+            &mut db,
+            &mut ftp,
+            &radar.opts,
+        )?);
+    }
+
+    let mut next_check = update_radar_images(&mut managers, &mut db, &mut ftp)?;
+    manage_radar_images(&mut managers, &mut db)?;
+
+    if !monitor {
+        return Ok(());
+    }
+
+    loop {
+        let sleep_duration = next_check - Utc::now();
+        // The FTP connection will timeout irrecoverably if we wait too long without checking
+        let sleep_duration = sleep_duration.min(Duration::seconds(150));
+        debug!(
+            "Next check for radar images in {} seconds",
+            sleep_duration.num_seconds()
+        );
+        if sleep_duration > Duration::seconds(0) {
+            sleep(sleep_duration.to_std().unwrap());
+        }
+        next_check = update_radar_images(&mut managers, &mut db, &mut ftp)?;
+        manage_radar_images(&mut managers, &mut db)?;
+    }
+}
+
+fn manage_radar_images(managers: &mut Vec<RadarImageManager>, db: &mut Database) -> Result<()> {
+    for manager in managers {
+        if manager.opts.create_png {
+            manager.write_pngs()?;
+        }
+        if manager.opts.create_apng {
+            manager.create_apng()?;
+        }
+        if manager.opts.open_mpv {
+            manager.open_images()?;
+        }
+        let removed = manager.prune()?;
+        db.delete_radar_data_layers(&removed)?;
     }
     Ok(())
 }

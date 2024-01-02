@@ -1,9 +1,12 @@
 use crate::client::Client;
+use crate::radar::{Radar, RadarId};
 use crate::{
     location::{Location, SearchResult},
     persistence::Database,
 };
 use anyhow::{anyhow, Result};
+use geo::{HaversineDistance, Point, RhumbBearing};
+use std::fmt::{self, Display};
 
 pub fn create_location(
     result: SearchResult,
@@ -37,6 +40,60 @@ pub fn create_location(
     database.insert_location(&location)?;
 
     Ok(location)
+}
+
+#[derive(Debug)]
+pub struct NearbyRadar {
+    pub id: RadarId,
+    pub name: String,
+    pub distance: i32,
+    pub direction: String,
+}
+
+impl Display for NearbyRadar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} - {}km {}", self.name, self.distance, self.direction)
+    }
+}
+
+pub fn get_nearby_radars(location: &Location, radars: &[Radar]) -> Vec<NearbyRadar> {
+    let location_point = Point::new(location.longitude, location.latitude);
+
+    let mut nearby_radars = Vec::new();
+    for radar in radars {
+        let radar_point = Point::new(radar.longitude as f64, radar.latitude as f64);
+        let distance = location_point.haversine_distance(&radar_point);
+        let distance = (distance / 1000.0) as i32;
+        let bearing = location_point.rhumb_bearing(radar_point);
+
+        let direction = match bearing {
+            x if x < 22.5 => "N",
+            x if x < 67.5 => "NE",
+            x if x < 112.5 => "E",
+            x if x < 157.5 => "SE",
+            x if x < 202.5 => "S",
+            x if x < 247.5 => "SW",
+            x if x < 292.5 => "W",
+            x if x < 337.5 => "NW",
+            _ => "N",
+        };
+
+        nearby_radars.push(NearbyRadar {
+            id: radar.id,
+            name: radar.full_name.clone(),
+            distance,
+            direction: direction.into(),
+        })
+    }
+
+    nearby_radars.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+    let new_len = nearby_radars
+        .iter()
+        .position(|r| r.distance > 200)
+        .unwrap_or(1)
+        .max(1);
+    nearby_radars.truncate(new_len);
+    nearby_radars
 }
 
 pub fn ids_to_locations(
