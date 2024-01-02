@@ -59,9 +59,9 @@ pub enum Commands {
     Monitor,
     /// Search for a location and save it in the config file
     AddLocation,
-    /// Print the 7-day forecast
+    /// Display the 7-day forecast
     Daily(DailyArgs),
-    /// Print the current weather
+    /// Display the current weather
     Current(CurrentArgs),
     /// Download and view radar images
     Radar(RadarArgs),
@@ -83,8 +83,8 @@ pub fn cli() -> Result<()> {
         Some(Commands::Init) => init(&mut config)?,
         Some(Commands::Monitor) => monitor(&config)?,
         Some(Commands::AddLocation) => add_location(&mut config)?,
-        Some(Commands::Daily(args)) => print_daily(&config, args)?,
-        Some(Commands::Current(args)) => print_current(&config, args)?,
+        Some(Commands::Daily(args)) => daily(&config, args)?,
+        Some(Commands::Current(args)) => current(&config, args)?,
         Some(Commands::Radar(args)) => radar(&config, args.monitor)?,
         None => {}
     }
@@ -184,7 +184,7 @@ pub struct CurrentArgs {
     fstring: Option<String>,
 }
 
-fn print_current(config: &Config, args: &CurrentArgs) -> Result<()> {
+fn current(config: &Config, args: &CurrentArgs) -> Result<()> {
     if config.main.locations.is_empty() {
         return Err(anyhow!("No locations specified"));
     }
@@ -223,7 +223,7 @@ pub struct DailyArgs {
     extended: bool,
 }
 
-fn print_daily(config: &Config, args: &DailyArgs) -> Result<()> {
+fn daily(config: &Config, args: &DailyArgs) -> Result<()> {
     if config.main.locations.is_empty() {
         return Err(anyhow!("No locations specified"));
     }
