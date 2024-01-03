@@ -10,6 +10,7 @@ use crate::radar::{
 };
 use crate::services::{create_location, get_nearby_radars, ids_to_locations, update_if_due};
 use crate::station::StationsTable;
+use crate::weather::FstringKey;
 use anyhow::{anyhow, Result};
 use chrono::{Duration, Local, Utc};
 use clap::{Parser, Subcommand};
@@ -22,6 +23,7 @@ use serde_with::skip_serializing_none;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
+use strum::IntoEnumIterator;
 use tracing::{debug, error, info};
 
 fn default(path: &Path) -> String {
@@ -182,9 +184,18 @@ pub struct CurrentArgs {
     /// Custom format string
     #[arg(short, long)]
     fstring: Option<String>,
+    /// List the keys that can be used in an fstring
+    #[arg(short, long)]
+    list_keys: bool,
 }
 
 fn current(config: &Config, args: &CurrentArgs) -> Result<()> {
+    if args.list_keys {
+        for key in FstringKey::iter() {
+            println!("{}", key.as_ref());
+        }
+        return Ok(());
+    }
     if config.main.locations.is_empty() {
         return Err(anyhow!("No locations specified"));
     }
