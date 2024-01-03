@@ -8,7 +8,8 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, Local, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::DurationSeconds;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, str::FromStr};
+use strum_macros::{AsRefStr, EnumIter, EnumString};
 use tracing::debug;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -299,7 +300,10 @@ impl<'a> CurrentWeather<'a> {
                     return Err(anyhow!("{fstring} is not a valid format string"));
                 };
                 let key = &remainder[start..end];
-                self.push_value(key, &mut output)?;
+                let Ok(fstring_key) = FstringKey::from_str(key) else {
+                    return Err(anyhow!("{} is not a valid key", key));
+                };
+                fstring_key.push_value(&mut output, self);
                 pos = pos + end + 1;
                 remainder = &fstring[pos..];
             } else {
@@ -310,36 +314,61 @@ impl<'a> CurrentWeather<'a> {
 
         Ok(output)
     }
+}
 
-    fn push_value(&self, key: &'a str, output: &mut String) -> Result<()> {
-        match key {
-            "temp" => output.push_str(&self.temp.to_string()),
-            "temp_feels_like" => output.push_str(&self.temp_feels_like.to_string()),
-            "icon" => output.push_str(self.icon),
-            "next_temp" => output.push_str(&self.next_temp.to_string()),
-            "next_label" => output.push_str(self.next_label),
-            "later_temp" => output.push_str(&self.later_temp.to_string()),
-            "later_label" => output.push_str(self.later_label),
-            "max_temp" => output.push_str(&self.max_temp.to_string()),
-            "overnight_min" => output.push_str(&self.overnight_min.to_string()),
-            "tomorrow_max" => output.push_str(&self.tomorrow_max.to_string()),
-            "rain_since_9am" => output.push_str(&self.rain_since_9am.unwrap_or(0.0).to_string()),
-            "hourly_rain_chance" => output.push_str(&self.hourly_rain_chance.to_string()),
-            "hourly_rain_min" => output.push_str(&self.hourly_rain_min.to_string()),
-            "hourly_rain_max" => output.push_str(&self.hourly_rain_max.to_string()),
-            "today_rain_chance" => output.push_str(&self.today_rain_chance.to_string()),
-            "today_rain_min" => output.push_str(&self.today_rain_min.to_string()),
-            "today_rain_max" => output.push_str(&self.today_rain_max.to_string()),
-            "short_text" => output.push_str(self.short_text.as_ref().unwrap_or(&String::new())),
-            "extended_text" => {
-                output.push_str(self.extended_text.as_ref().unwrap_or(&String::new()))
-            }
-            "wind_speed" => output.push_str(&self.wind_speed.to_string()),
-            "wind_direction" => output.push_str(self.wind_direction),
-            "gust" => output.push_str(&self.gust.to_string()),
-            _ => return Err(anyhow!("{} is not a valid key", key)),
+#[derive(AsRefStr, EnumString, EnumIter)]
+#[strum(serialize_all = "snake_case")]
+pub enum FstringKey {
+    Temp,
+    TempFeelsLike,
+    Icon,
+    NextTemp,
+    NextLabel,
+    LaterTemp,
+    LaterLabel,
+    MaxTemp,
+    OvernightMin,
+    TomorrowMax,
+    #[strum(serialize = "rain_since_9am")]
+    RainSince9am,
+    HourlyRainChance,
+    HourlyRainMin,
+    HourlyRainMax,
+    TodayRainChance,
+    TodayRainMin,
+    TodayRainMax,
+    ShortText,
+    ExtendedText,
+    WindSpeed,
+    WindDirection,
+    WindGust,
+}
+
+impl FstringKey {
+    fn push_value(&self, s: &mut String, w: &CurrentWeather) {
+        match self {
+            Self::Temp => s.push_str(&w.temp.to_string()),
+            Self::TempFeelsLike => s.push_str(&w.temp_feels_like.to_string()),
+            Self::Icon => s.push_str(w.icon),
+            Self::NextTemp => s.push_str(&w.next_temp.to_string()),
+            Self::NextLabel => s.push_str(w.next_label),
+            Self::LaterTemp => s.push_str(&w.later_temp.to_string()),
+            Self::LaterLabel => s.push_str(w.later_label),
+            Self::MaxTemp => s.push_str(&w.max_temp.to_string()),
+            Self::OvernightMin => s.push_str(&w.overnight_min.to_string()),
+            Self::TomorrowMax => s.push_str(&w.tomorrow_max.to_string()),
+            Self::RainSince9am => s.push_str(&w.rain_since_9am.unwrap_or(0.0).to_string()),
+            Self::HourlyRainChance => s.push_str(&w.hourly_rain_chance.to_string()),
+            Self::HourlyRainMin => s.push_str(&w.hourly_rain_min.to_string()),
+            Self::HourlyRainMax => s.push_str(&w.hourly_rain_max.to_string()),
+            Self::TodayRainChance => s.push_str(&w.today_rain_chance.to_string()),
+            Self::TodayRainMin => s.push_str(&w.today_rain_min.to_string()),
+            Self::TodayRainMax => s.push_str(&w.today_rain_max.to_string()),
+            Self::ShortText => s.push_str(w.short_text.as_ref().unwrap_or(&String::new())),
+            Self::ExtendedText => s.push_str(w.extended_text.as_ref().unwrap_or(&String::new())),
+            Self::WindSpeed => s.push_str(&w.wind_speed.to_string()),
+            Self::WindDirection => s.push_str(w.wind_direction),
+            Self::WindGust => s.push_str(&w.gust.to_string()),
         }
-
-        Ok(())
     }
 }
