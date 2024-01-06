@@ -279,7 +279,7 @@ fn daily(config: &Config, args: &DailyArgs) -> Result<()> {
                 .format("%a %d %b")
                 .to_string();
 
-            let max = day.temp_max.to_string();
+            let max = day.temp_max.map_or("".to_string(), |t| t.to_string());
             let min = day.temp_min.map_or("".to_string(), |t| t.to_string());
             let description = if args.extended {
                 day.extended_text.clone().unwrap_or(String::new())
@@ -287,15 +287,21 @@ fn daily(config: &Config, args: &DailyArgs) -> Result<()> {
                 day.short_text.clone().unwrap_or(String::new())
             };
 
-            let rain = if let Some(max) = day.rain.amount.max {
+            let rain = if day.rain.amount.max.is_some() && day.rain.amount.lower_range.is_some() {
                 format!(
                     "{}-{}{}",
-                    day.rain.amount.lower_range, max, day.rain.amount.units
+                    day.rain.amount.lower_range.unwrap(),
+                    day.rain.amount.max.unwrap(),
+                    day.rain.amount.units
                 )
             } else {
                 "0mm".to_string()
             };
-            let chance = format!("{}%", day.rain.chance);
+            let chance = if let Some(chance) = day.rain.chance {
+                format!("{}%", chance)
+            } else {
+                String::new()
+            };
 
             table.add_row(vec![
                 Cell::new(&date),

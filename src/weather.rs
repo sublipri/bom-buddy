@@ -187,6 +187,11 @@ impl Weather {
         let mut days = self.daily_forecast.days.iter();
         let today = days.next().unwrap();
         let tomorrow = days.next().unwrap();
+        // temp_max should only ever be None on the last day of the forecast
+        // provide an obviously wrong value rather than crashing if it is None
+        let today_max = today.temp_max.unwrap_or(-9999.0);
+        let overnight_min = tomorrow.temp_min.unwrap_or(-9999.0);
+        let tomorrow_max = tomorrow.temp_max.unwrap_or(-9999.0);
 
         let (temp, temp_feels_like, max_temp, wind_speed, wind_direction, gust) =
             if let Some(obs) = observation {
@@ -198,7 +203,7 @@ impl Weather {
                 (
                     obs.temp,
                     obs.temp_feels_like,
-                    f32::max(obs.max_temp.value, today.temp_max),
+                    f32::max(obs.max_temp.value, today_max),
                     obs.wind.speed_kilometre,
                     wind_direction,
                     obs.gust.speed_kilometre,
@@ -207,15 +212,12 @@ impl Weather {
                 (
                     hourly.temp,
                     hourly.temp_feels_like,
-                    today.temp_max,
+                    today_max,
                     hourly.wind.speed_kilometre,
                     &hourly.wind.direction,
                     hourly.wind.gust_speed_kilometre,
                 )
             };
-
-        let overnight_min = tomorrow.temp_min.unwrap();
-        let tomorrow_max = tomorrow.temp_max;
 
         let current_time = now.with_timezone(&Local).time();
         let start = NaiveTime::from_hms_opt(6, 0, 0).unwrap();
@@ -245,8 +247,8 @@ impl Weather {
             hourly_rain_chance: hourly.rain.chance,
             hourly_rain_min: hourly.rain.amount.min,
             hourly_rain_max: hourly.rain.amount.max.unwrap_or(0),
-            today_rain_chance: today.rain.chance,
-            today_rain_min: today.rain.amount.min,
+            today_rain_chance: today.rain.chance.unwrap_or(0),
+            today_rain_min: today.rain.amount.min.unwrap_or(0),
             today_rain_max: today.rain.amount.max.unwrap_or(0),
             wind_speed,
             wind_direction,

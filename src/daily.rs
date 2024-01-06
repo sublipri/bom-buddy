@@ -29,10 +29,10 @@ pub struct DailyForecastData {
     pub uv: Uv,
     pub astronomical: Astronomical,
     pub date: DateTime<Utc>,
-    pub temp_max: f32,
+    pub temp_max: Option<f32>,
     pub temp_min: Option<f32>,
     pub extended_text: Option<String>,
-    pub icon_descriptor: IconDescriptor,
+    pub icon_descriptor: Option<IconDescriptor>,
     pub short_text: Option<String>,
     pub surf_danger: Option<String>,
     pub fire_danger: Option<String>,
@@ -88,18 +88,18 @@ pub struct FireDangerCategory {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Rain {
     pub amount: RainAmount,
-    pub chance: u8,
-    pub chance_of_no_rain_category: String,
-    pub precipitation_amount_25_percent_chance: u8,
-    pub precipitation_amount_50_percent_chance: u8,
-    pub precipitation_amount_75_percent_chance: u8,
+    pub chance: Option<u8>,
+    pub chance_of_no_rain_category: Option<String>,
+    pub precipitation_amount_25_percent_chance: Option<u8>,
+    pub precipitation_amount_50_percent_chance: Option<u8>,
+    pub precipitation_amount_75_percent_chance: Option<u8>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RainAmount {
-    pub lower_range: u16,
-    pub upper_range: u16,
-    pub min: u16,
+    pub lower_range: Option<u16>,
+    pub upper_range: Option<u16>,
+    pub min: Option<u16>,
     pub max: Option<u16>,
     pub units: String,
 }
