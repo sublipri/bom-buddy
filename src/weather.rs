@@ -190,12 +190,17 @@ impl Weather {
 
         let (temp, temp_feels_like, max_temp, wind_speed, wind_direction, gust) =
             if let Some(obs) = observation {
+                let wind_direction = if let Some(dir) = &obs.wind.direction {
+                    dir
+                } else {
+                    &hourly.wind.direction
+                };
                 (
                     obs.temp,
                     obs.temp_feels_like,
                     f32::max(obs.max_temp.value, today.temp_max),
                     obs.wind.speed_kilometre,
-                    &obs.wind.direction,
+                    wind_direction,
                     obs.gust.speed_kilometre,
                 )
             } else {

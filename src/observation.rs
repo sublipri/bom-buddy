@@ -80,7 +80,7 @@ pub struct MaxGust {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Wind {
-    pub direction: String,
+    pub direction: Option<String>,
     pub speed_kilometre: u8,
     pub speed_knot: u8,
 }
