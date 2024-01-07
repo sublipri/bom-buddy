@@ -10,6 +10,7 @@ use crate::radar::{
 };
 use crate::services::{create_location, get_nearby_radars, ids_to_locations, update_if_due};
 use crate::station::StationsTable;
+use crate::util::format_duration;
 use crate::weather::FstringKey;
 use anyhow::{anyhow, Result};
 use chrono::{Duration, Local, Utc};
@@ -138,8 +139,10 @@ fn monitor(config: &Config) -> Result<()> {
         info!("Monitoring weather for {}", location.id);
     }
     loop {
-        update_if_due(&mut locations, &client, &database)?;
-        sleep(Duration::seconds(1).to_std().unwrap());
+        let next_check = update_if_due(&mut locations, &client, &database)?;
+        let sleep_duration = (next_check - Utc::now()).max(Duration::seconds(1));
+        debug!("Next weather update in {}", format_duration(sleep_duration));
+        sleep((sleep_duration + Duration::seconds(1)).to_std().unwrap());
     }
 }
 
@@ -203,7 +206,7 @@ fn current(config: &Config, args: &CurrentArgs) -> Result<()> {
     let database = config.get_database()?;
     let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
     if args.check {
-        update_if_due(&mut locations, &client, &database)?
+        update_if_due(&mut locations, &client, &database)?;
     }
     let fstring = args
         .fstring
@@ -245,10 +248,8 @@ fn daily(config: &Config, args: &DailyArgs) -> Result<()> {
     if args.force_check {
         for location in &mut locations {
             let new_daily = client.get_daily(&location.geohash)?;
-            let was_updated = location.weather.update_daily(Utc::now(), new_daily);
-            if was_updated {
-                database.update_weather(location)?;
-            }
+            location.weather.update_daily(Utc::now(), new_daily);
+            database.update_weather(location)?;
         }
     } else if args.check {
         update_if_due(&mut locations, &client, &database)?;

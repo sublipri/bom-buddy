@@ -12,5 +12,6 @@ pub mod persistence;
 pub mod radar;
 pub mod services;
 pub mod station;
+pub mod util;
 pub mod warning;
 pub mod weather;

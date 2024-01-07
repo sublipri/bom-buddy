@@ -5,6 +5,7 @@ use crate::{
     persistence::Database,
 };
 use anyhow::{anyhow, Result};
+use chrono::{DateTime, Utc};
 use geo::{HaversineDistance, Point, RhumbBearing};
 use std::fmt::{self, Display};
 
@@ -142,12 +143,14 @@ pub fn update_if_due(
     locations: &mut Vec<Location>,
     client: &Client,
     database: &Database,
-) -> Result<()> {
+) -> Result<DateTime<Utc>> {
+    let mut next_datetimes = Vec::with_capacity(locations.len());
     for location in locations {
-        let was_updated = location.weather.update_if_due(client)?;
+        let (was_updated, next_check) = location.weather.update_if_due(client)?;
         if was_updated {
             database.update_weather(location)?;
         }
+        next_datetimes.push(next_check);
     }
-    Ok(())
+    Ok(*next_datetimes.iter().min().unwrap())
 }

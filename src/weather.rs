@@ -3,6 +3,7 @@ use crate::daily::DailyForecast;
 use crate::descriptor::IconDescriptor;
 use crate::hourly::HourlyForecast;
 use crate::observation::Observation;
+use crate::util::format_duration;
 use crate::warning::Warning;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, Local, NaiveTime, Utc};
@@ -44,11 +45,13 @@ pub struct WeatherOptions {
     pub hourly_update_frequency: Duration,
     #[serde_as(as = "DurationSeconds<i64>")]
     pub hourly_overdue_delay: Duration,
-    /// Only used when a DailyForecast has no next_issue_time
     #[serde_as(as = "DurationSeconds<i64>")]
     pub daily_update_frequency: Duration,
     #[serde_as(as = "DurationSeconds<i64>")]
     pub daily_overdue_delay: Duration,
+    // The BOM will sometimes issue a new forecast before the advertised next_issue_time
+    // so we provide the option to ignore that and just check at a regular interval
+    pub use_daily_next_issue_time: bool,
     #[serde_as(as = "DurationSeconds<i64>")]
     pub warning_update_frequency: Duration,
 }
@@ -63,8 +66,9 @@ impl Default for WeatherOptions {
             observation_overdue_delay: Duration::minutes(2),
             observation_missing_delay: Duration::hours(1),
             hourly_update_frequency: Duration::hours(3),
-            hourly_overdue_delay: Duration::minutes(30),
+            hourly_overdue_delay: Duration::hours(1),
             daily_update_frequency: Duration::hours(1),
+            use_daily_next_issue_time: false,
             daily_overdue_delay: Duration::minutes(30),
             warning_update_frequency: Duration::minutes(30),
         }
@@ -75,49 +79,58 @@ impl Weather {
     pub fn observation(&self) -> Option<&Observation> {
         self.observations.front()
     }
-    pub fn update_if_due(&mut self, client: &Client) -> Result<bool> {
+    pub fn update_if_due(&mut self, client: &Client) -> Result<(bool, DateTime<Utc>)> {
         let now = Utc::now();
         let mut was_updated = false;
 
         if self.opts.check_observations && now > self.next_observation_due {
             if let Some(observation) = client.get_observation(&self.geohash)? {
-                was_updated = self.update_observation(now, observation);
+                self.update_observation(now, observation);
             } else {
                 self.next_observation_due = now + self.opts.observation_missing_delay;
             }
+            was_updated = true;
         }
 
         if now > self.next_hourly_due {
             let hourly = client.get_hourly(&self.geohash)?;
-            was_updated = self.update_hourly(now, hourly);
+            self.update_hourly(now, hourly);
+            was_updated = true;
         }
 
         if now > self.next_daily_due {
             let daily = client.get_daily(&self.geohash)?;
-            was_updated = self.update_daily(now, daily);
+            self.update_daily(now, daily);
+            was_updated = true;
         }
 
         if now > self.next_warning_due {
-            let warnings = client.get_warnings(&self.geohash)?;
-            if warnings != self.warnings {
-                was_updated = true;
-            }
+            self.warnings = client.get_warnings(&self.geohash)?;
             self.next_warning_due = now + self.opts.warning_update_frequency;
+            was_updated = true;
         }
 
-        Ok(was_updated)
+        let next_datetimes = [
+            self.next_observation_due,
+            self.next_hourly_due,
+            self.next_daily_due,
+            self.next_warning_due,
+        ];
+        let next_check = next_datetimes.iter().min().unwrap();
+
+        Ok((was_updated, *next_check))
     }
 
-    pub fn update_observation(&mut self, now: DateTime<Utc>, observation: Observation) -> bool {
+    pub fn update_observation(&mut self, now: DateTime<Utc>, observation: Observation) {
         if let Some(last) = self.observation() {
             if observation.issue_time == last.issue_time {
                 debug!(
-                    "{} observation overdue. Next check in {} minutes",
+                    "{} observation overdue. Next check in {}",
                     &self.geohash,
-                    &self.opts.observation_overdue_delay.num_minutes()
+                    format_duration(self.opts.observation_overdue_delay)
                 );
                 self.next_observation_due = now + self.opts.observation_overdue_delay;
-                return false;
+                return;
             }
         }
 
@@ -128,51 +141,77 @@ impl Weather {
             self.next_observation_due = now + self.opts.observation_overdue_delay;
         }
 
+        debug!(
+            "{} new observation received. Next check in {}",
+            &self.geohash,
+            format_duration(self.next_observation_due - now)
+        );
         self.observations.push_front(observation);
         if self.observations.len() > self.opts.past_observation_amount {
             self.observations.pop_back();
         }
-
-        true
     }
 
-    pub fn update_hourly(&mut self, now: DateTime<Utc>, hourly: HourlyForecast) -> bool {
+    pub fn update_hourly(&mut self, now: DateTime<Utc>, hourly: HourlyForecast) {
         let last = &self.hourly_forecast;
         if hourly.issue_time == last.issue_time {
             debug!(
-                "{} hourly forecast overdue. Next check in {} minutes",
+                "{} hourly forecast overdue. Next check in {}",
                 &self.geohash,
-                &self.opts.hourly_overdue_delay.num_minutes()
+                format_duration(self.opts.hourly_overdue_delay)
             );
             self.next_hourly_due = now + self.opts.hourly_overdue_delay;
-            return false;
+            // Previous hours will be removed in the API response even if the issue time is the same
+            self.hourly_forecast = hourly;
+            return;
         }
 
         self.next_hourly_due =
             hourly.issue_time + self.opts.hourly_update_frequency + self.opts.update_delay;
+        debug!(
+            "{} new hourly forecast received. Next check in {}",
+            &self.geohash,
+            format_duration(self.next_hourly_due - now)
+        );
         self.hourly_forecast = hourly;
-        true
     }
 
-    pub fn update_daily(&mut self, now: DateTime<Utc>, new_daily: DailyForecast) -> bool {
+    pub fn update_daily(&mut self, now: DateTime<Utc>, new_daily: DailyForecast) {
         let last = &self.daily_forecast;
         if new_daily.issue_time == last.issue_time {
-            debug!(
-                "{} daily forecast overdue. Next check in {} minutes",
-                &self.geohash,
-                &self.opts.daily_overdue_delay.num_minutes()
-            );
-            self.next_daily_due = now + self.opts.daily_overdue_delay;
-            return false;
+            self.next_daily_due = if self.opts.use_daily_next_issue_time {
+                debug!(
+                    "{} daily forecast overdue. Next check in {}",
+                    &self.geohash,
+                    format_duration(self.opts.daily_overdue_delay)
+                );
+                now + self.opts.daily_overdue_delay
+            } else {
+                debug!(
+                    "{} No new daily forecast. Next check in {}",
+                    &self.geohash,
+                    format_duration(self.opts.daily_update_frequency)
+                );
+                now + self.opts.daily_update_frequency
+            };
+            return;
         }
 
-        self.next_daily_due = if let Some(next) = new_daily.next_issue_time {
-            next + self.opts.update_delay
+        self.next_daily_due = if self.opts.use_daily_next_issue_time {
+            if let Some(next) = new_daily.next_issue_time {
+                next + self.opts.update_delay
+            } else {
+                new_daily.issue_time + self.opts.daily_update_frequency + self.opts.update_delay
+            }
         } else {
-            new_daily.issue_time + self.opts.daily_update_frequency + self.opts.update_delay
+            now + self.opts.daily_update_frequency
         };
+        debug!(
+            "{} new daily forecast received. Next check in {}",
+            &self.geohash,
+            format_duration(self.next_daily_due - now)
+        );
         self.daily_forecast = new_daily;
-        true
     }
 
     pub fn current(&self) -> CurrentWeather {
