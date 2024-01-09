@@ -11,7 +11,7 @@ use crate::radar::{
 use crate::services::{create_location, get_nearby_radars, ids_to_locations, update_if_due};
 use crate::station::StationsTable;
 use crate::util::{format_duration, remove_if_exists};
-use crate::weather::FstringKey;
+use crate::weather::{FstringKey, WeatherOptions};
 use anyhow::{anyhow, Result};
 use chrono::{Duration, Local, Utc};
 use clap::{Parser, Subcommand};
@@ -21,6 +21,7 @@ use comfy_table::*;
 use inquire::{Select, Text};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -75,6 +76,8 @@ pub enum Commands {
     Monitor,
     /// Search for a location and save it in the config file
     AddLocation,
+    /// Edit options used when updating the weather
+    EditOpts,
     /// Display the 7-day forecast
     Daily(DailyArgs),
     /// Display the current weather
@@ -94,6 +97,7 @@ pub fn cli() -> Result<()> {
         Some(Commands::Init(args)) => init(&mut config, args)?,
         Some(Commands::Monitor) => monitor(&config)?,
         Some(Commands::AddLocation) => add_location(&mut config)?,
+        Some(Commands::EditOpts) => edit_weather_opts(&config)?,
         Some(Commands::Daily(args)) => daily(&config, args)?,
         Some(Commands::Current(args)) => current(&config, args)?,
         Some(Commands::Radar(args)) => radar(&config, args.monitor)?,
@@ -194,6 +198,25 @@ fn search_for_location(client: &Client) -> Result<SearchResult> {
         };
         return Ok(selection);
     }
+}
+
+fn edit_weather_opts(config: &Config) -> Result<()> {
+    let client = config.get_client();
+    let database = config.get_database()?;
+    let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
+    let mut location_opts = BTreeMap::new();
+    for location in &locations {
+        location_opts.insert(&location.id, &location.weather.opts);
+    }
+    let to_edit = serde_yaml::to_string(&location_opts)?;
+    let mut builder = tempfile::Builder::new();
+    let edited = edit::edit_with_builder(to_edit, builder.suffix(".yml"))?;
+    let mut edited_opts: BTreeMap<String, WeatherOptions> = serde_yaml::from_str(&edited)?;
+    for location in &mut locations {
+        location.weather.opts = edited_opts.remove(&location.id).unwrap();
+        database.update_weather(location)?;
+    }
+    Ok(())
 }
 
 #[derive(Parser, Debug, Serialize, Deserialize)]
