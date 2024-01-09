@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 pub struct DailyForecast {
     pub issue_time: DateTime<Utc>,
     pub next_issue_time: Option<DateTime<Utc>>,
-    pub forecast_region: String,
-    pub forecast_type: String,
+    pub forecast_region: Option<String>,
+    pub forecast_type: Option<String>,
     pub days: Vec<DailyForecastData>,
 }
 
@@ -44,8 +44,8 @@ pub struct DailyForecastData {
 pub struct DailyForecastMetadata {
     pub issue_time: DateTime<Utc>,
     pub response_timestamp: DateTime<Utc>,
-    pub forecast_region: String,
-    pub forecast_type: String,
+    pub forecast_region: Option<String>,
+    pub forecast_type: Option<String>,
     pub next_issue_time: Option<DateTime<Utc>>,
 }
 
