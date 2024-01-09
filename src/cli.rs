@@ -10,7 +10,7 @@ use crate::radar::{
 };
 use crate::services::{create_location, get_nearby_radars, ids_to_locations, update_if_due};
 use crate::station::StationsTable;
-use crate::util::format_duration;
+use crate::util::{format_duration, remove_if_exists};
 use crate::weather::FstringKey;
 use anyhow::{anyhow, Result};
 use chrono::{Duration, Local, Utc};
@@ -57,7 +57,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Initialize the database and setup your location
-    Init,
+    Init(InitArgs),
     /// Run continuously and check the weather when an update is due.
     Monitor,
     /// Search for a location and save it in the config file
@@ -83,7 +83,7 @@ pub fn cli() -> Result<()> {
     debug!("Config: {:#?}", &config);
 
     match &args.command {
-        Some(Commands::Init) => init(&mut config)?,
+        Some(Commands::Init(args)) => init(&mut config, args)?,
         Some(Commands::Monitor) => monitor(&config)?,
         Some(Commands::AddLocation) => add_location(&mut config)?,
         Some(Commands::Daily(args)) => daily(&config, args)?,
@@ -94,7 +94,16 @@ pub fn cli() -> Result<()> {
     Ok(())
 }
 
-fn init(config: &mut Config) -> Result<()> {
+#[derive(Parser, Debug, Serialize, Deserialize)]
+pub struct InitArgs {
+    /// Overwrite any existing database and config
+    #[arg(short, long)]
+    pub force: bool,
+}
+fn init(config: &mut Config, args: &InitArgs) -> Result<()> {
+    if args.force {
+        remove_if_exists(&config.main.db_path)?;
+    }
     let client = Client::default();
     let mut db = config.get_database()?;
     db.init()?;

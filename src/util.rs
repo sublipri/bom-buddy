@@ -1,4 +1,7 @@
+use anyhow::Result;
 use chrono::Duration;
+use std::{fs, path::Path};
+use tracing::info;
 
 pub fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.num_seconds();
@@ -12,4 +15,12 @@ pub fn format_duration(duration: Duration) -> String {
     } else {
         format!("{:02}s", seconds)
     }
+}
+
+pub fn remove_if_exists(path: &Path) -> Result<()> {
+    if path.exists() {
+        info!("Deleting {}", path.display());
+        fs::remove_file(path)?;
+    }
+    Ok(())
 }

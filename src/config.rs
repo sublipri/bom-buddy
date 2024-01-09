@@ -1,6 +1,7 @@
 use crate::cli::{Cli, Commands};
 use crate::persistence::Database;
 use crate::radar::{Radar, RadarId, RadarImageOptions};
+use crate::util::remove_if_exists;
 use crate::{location::Location, logging::LoggingOptions};
 use anyhow::{anyhow, Result};
 use etcetera::{choose_app_strategy, AppStrategy, AppStrategyArgs};
@@ -103,6 +104,11 @@ impl Config {
         } else {
             Self::default_path().to_owned()
         };
+        if let Some(Commands::Init(iargs)) = &args.command {
+            if iargs.force {
+                remove_if_exists(&config_path)?;
+            }
+        }
 
         let main = Figment::from(Serialized::defaults(MainConfig::default()))
             .merge(Yaml::file(&config_path))
