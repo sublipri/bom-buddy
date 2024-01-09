@@ -1,4 +1,5 @@
 use crate::cli::{Cli, Commands};
+use crate::client::{Client, ClientOptions};
 use crate::persistence::Database;
 use crate::radar::{Radar, RadarId, RadarImageOptions};
 use crate::util::remove_if_exists;
@@ -34,6 +35,7 @@ pub struct MainConfig {
     pub db_path: PathBuf,
     pub locations: Vec<String>,
     pub logging: LoggingOptions,
+    pub client: ClientOptions,
     pub radars: Vec<RadarConfig>,
     pub current_fstring: String,
 }
@@ -50,6 +52,7 @@ impl Default for MainConfig {
         Self {
             db_path: Config::default_dirs().state.join("bom-buddy.db"),
             logging: LoggingOptions::default(),
+            client: ClientOptions::default(),
             radars: Vec::new(),
             locations: Vec::new(),
             current_fstring: "{icon} {temp} ({next_temp})".to_string(),
@@ -145,6 +148,10 @@ impl Config {
 
     pub fn get_database(&self) -> Result<Database> {
         Database::from_path(self.main.db_path.clone())
+    }
+
+    pub fn get_client(&self) -> Client {
+        Client::new(self.main.client.clone())
     }
 
     pub fn add_location(&mut self, location: &Location) -> Result<()> {

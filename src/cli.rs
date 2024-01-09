@@ -112,7 +112,7 @@ fn init(config: &mut Config, args: &InitArgs) -> Result<()> {
     if args.force {
         remove_if_exists(&config.main.db_path)?;
     }
-    let client = Client::default();
+    let client = config.get_client();
     let mut db = config.get_database()?;
     db.init()?;
     info!("Downloading weather stations");
@@ -148,7 +148,7 @@ fn monitor(config: &Config) -> Result<()> {
     if config.main.locations.is_empty() {
         return Err(anyhow!("No locations specified"));
     }
-    let client = Client::default();
+    let client = config.get_client();
     let database = config.get_database()?;
     let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
 
@@ -164,7 +164,7 @@ fn monitor(config: &Config) -> Result<()> {
 }
 
 fn add_location(config: &mut Config) -> Result<()> {
-    let client = Client::default();
+    let client = config.get_client();
     let database = config.get_database()?;
     let result = search_for_location(&client)?;
     let location = create_location(result, &client, &database)?;
@@ -219,7 +219,7 @@ fn current(config: &Config, args: &CurrentArgs) -> Result<()> {
     if config.main.locations.is_empty() {
         return Err(anyhow!("No locations specified"));
     }
-    let client = Client::default();
+    let client = config.get_client();
     let database = config.get_database()?;
     let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
     if args.check {
@@ -258,7 +258,7 @@ fn daily(config: &Config, args: &DailyArgs) -> Result<()> {
     if config.main.locations.is_empty() {
         return Err(anyhow!("No locations specified"));
     }
-    let client = Client::default();
+    let client = config.get_client();
     let database = config.get_database()?;
     let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
 

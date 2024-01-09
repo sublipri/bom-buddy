@@ -10,6 +10,8 @@ use anyhow::anyhow;
 use anyhow::Result;
 use chrono::Duration;
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use serde_with::DurationSeconds;
 use std::collections::VecDeque;
 use std::thread::sleep;
 use tracing::{debug, error, trace};
@@ -19,11 +21,15 @@ const URL_BASE: &str = "https://api.weather.bom.gov.au/v1/locations";
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
 
-#[derive(Debug)]
+#[serde_with::serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ClientOptions {
     pub retry_limit: u64,
+    #[serde_as(as = "DurationSeconds<i64>")]
     pub retry_delay: Duration,
+    #[serde_as(as = "DurationSeconds<i64>")]
     pub timeout: Duration,
+    #[serde_as(as = "DurationSeconds<i64>")]
     pub timeout_connect: Duration,
     pub user_agent: String,
 }
