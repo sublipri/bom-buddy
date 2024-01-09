@@ -1,12 +1,14 @@
 use crate::config::Config;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use strum_macros::{Display, EnumString};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::filter::{filter_fn, LevelFilter};
 use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::*;
 
-#[derive(clap::ValueEnum, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(clap::ValueEnum, Copy, Clone, Debug, Serialize, Deserialize, EnumString, Display)]
+#[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum LogLevel {
     Off,
@@ -43,13 +45,10 @@ pub struct LoggingOptions {
 
 impl Default for LoggingOptions {
     fn default() -> Self {
-        let mut file_path = Config::default_dirs().run.clone();
-        file_path.push("bom-buddy.log");
-
         Self {
             use_stderr: true,
             console_level: LogLevel::Info,
-            file_path,
+            file_path: Config::default_dirs().run.join("bom-buddy.log"),
             file_level: LogLevel::Debug,
             journal_level: LogLevel::Off,
             rotate_logs: false,

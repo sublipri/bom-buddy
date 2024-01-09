@@ -6,7 +6,7 @@ use crate::logging::{setup_logging, LogLevel};
 use crate::persistence::Database;
 use crate::radar::{
     get_radar_image_managers, update_radar_images, Radar, RadarImageFeature, RadarImageManager,
-    RadarType,
+    RadarImageOptions, RadarType,
 };
 use crate::services::{create_location, get_nearby_radars, ids_to_locations, update_if_due};
 use crate::station::StationsTable;
@@ -21,29 +21,42 @@ use comfy_table::*;
 use inquire::{Select, Text};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+use std::fmt::Display;
 use std::io::IsTerminal;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::thread::sleep;
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info};
 
-fn default(path: &Path) -> String {
-    format!("[default: {}]", path.as_os_str().to_string_lossy())
+// Hacky way to display a default config value on the CLI.
+// Can't actually set a default value since it would override the config file
+fn show_default(default: &impl Display, help: &str) -> String {
+    format!("{help} [default: {default}]")
 }
 /// Australian weather tool
 #[skip_serializing_none]
 #[derive(Parser, Debug, Serialize, Deserialize)]
 #[command(version, about, long_about = None)]
 pub struct Cli {
-    #[arg(short, long, value_name = "DIR", help = default(&Config::default_dirs().state)) ]
-    pub state_dir: Option<PathBuf>,
+    #[arg(short, long, value_name = "FILE",
+        help = show_default(&Config::default().main.db_path.display(), "Database file"))]
+    pub db_path: Option<PathBuf>,
 
-    #[arg(short, long = "config", value_name = "FILE", help = default(&Config::default_path()))]
+    #[arg(short, long = "config", value_name = "FILE",
+        help = show_default(&Config::default_path().display(), "Config file"))]
     pub config_path: Option<PathBuf>,
 
-    /// [default: info]
-    #[arg(short, long)]
+    #[arg(short = 'L', long, value_name = "FILE",
+        help = show_default(&Config::default().main.logging.file_path.display(), "Log file"))]
+    pub log_path: Option<PathBuf>,
+
+    #[arg(short, long,  value_name = "LEVEL",
+        help = show_default(&Config::default().main.logging.console_level, "Console log level"))]
     pub log_level: Option<LogLevel>,
+
+    #[arg(short = 'f', long, value_name = "LEVEL",
+        help = show_default(&Config::default().main.logging.file_level, "File log level"))]
+    pub log_file_level: Option<LogLevel>,
 
     /// Suburb followed by geohash e.g. Canberra-r3dp5hh (overrides config)
     #[arg(short = 'i', long = "location-id", value_name = "ID")]
@@ -72,12 +85,7 @@ pub enum Commands {
 
 pub fn cli() -> Result<()> {
     let args = Cli::parse();
-
     let mut config = Config::from_cli(&args)?;
-    if let Some(level) = args.log_level {
-        config.main.logging.console_level = level;
-        config.main.logging.file_level = level;
-    }
     let _guard = setup_logging(&config.main.logging);
     debug!("Command line arguments: {:#?}", &args);
     debug!("Config: {:#?}", &config);
@@ -363,8 +371,14 @@ pub struct RadarArgs {
     #[arg(short, long)]
     pub max_frames: Option<u64>,
     /// Output directory for image files
-    #[arg(short = 'o', long, value_name = "DIRECTORY")]
+    #[arg(short = 'o', long, value_name = "DIR",
+        help = show_default(&RadarImageOptions::default().image_dir.display(),
+        "Output directory for image files"))]
     pub image_dir: Option<PathBuf>,
+    #[arg(short = 'I', long, value_name = "DIR",
+        help = show_default(&RadarImageOptions::default().mpv_ipc_dir.display(),
+        "Runtime directory for MPV IPC sockets"))]
+    pub mpv_ipc_dir: Option<PathBuf>,
     /// Run continuously and fetch new radar images when available
     #[serde(skip)]
     #[arg(short = 'M', long)]

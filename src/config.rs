@@ -31,7 +31,7 @@ impl Default for Config {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MainConfig {
-    pub state_dir: PathBuf,
+    pub db_path: PathBuf,
     pub locations: Vec<String>,
     pub logging: LoggingOptions,
     pub radars: Vec<RadarConfig>,
@@ -48,7 +48,7 @@ pub struct RadarConfig {
 impl Default for MainConfig {
     fn default() -> Self {
         Self {
-            state_dir: Config::default_dirs().state.clone(),
+            db_path: Config::default_dirs().state.join("bom-buddy.db"),
             logging: LoggingOptions::default(),
             radars: Vec::new(),
             locations: Vec::new(),
@@ -59,9 +59,7 @@ impl Default for MainConfig {
 
 impl Config {
     pub fn default_path() -> PathBuf {
-        let mut path = PathBuf::from(&Self::default_dirs().config);
-        path.push("config.yml");
-        path
+        Self::default_dirs().config.join("config.yml")
     }
 
     pub fn from_default_path() -> Result<Self> {
@@ -125,8 +123,17 @@ impl Config {
             _ => main,
         };
 
-        let main = main.extract()?;
+        let mut main: MainConfig = main.extract()?;
 
+        if let Some(level) = args.log_level {
+            main.logging.console_level = level;
+        }
+        if let Some(level) = args.log_file_level {
+            main.logging.file_level = level;
+        }
+        if let Some(path) = &args.log_path {
+            main.logging.file_path = path.clone();
+        }
         Ok(Config { config_path, main })
     }
 
@@ -137,9 +144,7 @@ impl Config {
     }
 
     pub fn get_database(&self) -> Result<Database> {
-        let mut path = PathBuf::from(&self.main.state_dir);
-        path.push("bom-buddy.db");
-        Database::from_path(path)
+        Database::from_path(self.main.db_path.clone())
     }
 
     pub fn add_location(&mut self, location: &Location) -> Result<()> {
@@ -160,10 +165,7 @@ impl Config {
         let radar_config = RadarConfig {
             id: radar.id,
             name: radar.full_name.clone(),
-            opts: RadarImageOptions {
-                image_dir: self.main.state_dir.clone(),
-                ..Default::default()
-            },
+            opts: RadarImageOptions::default(),
         };
         info!(
             "Adding radar {} {} to {}",

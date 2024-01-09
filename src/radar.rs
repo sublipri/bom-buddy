@@ -361,6 +361,7 @@ pub struct RadarImageOptions {
     pub force: bool,
     pub open_mpv: bool,
     pub mpv_args: Vec<String>,
+    pub mpv_ipc_dir: PathBuf,
 }
 
 impl Default for RadarImageOptions {
@@ -386,12 +387,8 @@ impl Default for RadarImageOptions {
                 "--auto-window-resize=no".into(),
                 "--loop-playlist".into(),
             ],
-            image_dir: [
-                Config::default_dirs().state.as_path(),
-                &Path::new("radar-images"),
-            ]
-            .iter()
-            .collect(),
+            mpv_ipc_dir: Config::default_dirs().run.join("mpv-ipc"),
+            image_dir: Config::default_dirs().state.join("radar-images"),
         }
     }
 }
@@ -639,15 +636,12 @@ impl RadarImageManager {
         feature_layers: Vec<RadarImageFeatureLayer>,
         opts: RadarImageOptions,
     ) -> Self {
-        let mut image_dir = opts.image_dir.clone();
-        image_dir.push(format!("IDR{:02}{}", radar_id, radar_type.id()));
-
         let mpv = if opts.open_mpv {
             let socket_name = format!("IDR{:02}{}.sock", radar_id, radar_type.id());
             Some(MpvRadarViewer {
                 radar_id,
                 radar_type,
-                socket_path: Config::default_dirs().run.join(socket_name),
+                socket_path: opts.mpv_ipc_dir.join(socket_name),
                 handle: None,
                 frame_delay: opts.frame_delay_ms as f32 / 1000.0,
             })
@@ -655,6 +649,8 @@ impl RadarImageManager {
             None
         };
 
+        let image_dirname = format!("IDR{:02}{}", radar_id, radar_type.id());
+        let image_dir = opts.image_dir.join(&image_dirname);
         let mut frames = Vec::new();
         if let Ok(entries) = fs::read_dir(&image_dir) {
             for entry in entries {
