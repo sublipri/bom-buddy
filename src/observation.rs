@@ -12,7 +12,7 @@ pub struct Observation {
     pub max_gust: MaxGust,
     pub max_temp: Temperature,
     pub min_temp: Temperature,
-    pub rain_since_9am: f32,
+    pub rain_since_9am: Option<f32>,
     pub humidity: u8,
     pub station: Station,
 }
@@ -31,7 +31,7 @@ impl From<ObservationResponse> for Option<Observation> {
             max_gust: response.data.max_gust.unwrap(),
             max_temp: response.data.max_temp.unwrap(),
             min_temp: response.data.min_temp.unwrap(),
-            rain_since_9am: response.data.rain_since_9am.unwrap(),
+            rain_since_9am: response.data.rain_since_9am,
             humidity: response.data.humidity.unwrap(),
             station: response.data.station.unwrap(),
         })

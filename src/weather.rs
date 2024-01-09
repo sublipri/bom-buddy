@@ -279,7 +279,7 @@ impl Weather {
             later_label,
             overnight_min, // TODO: check what happens after midnight
             tomorrow_max,
-            rain_since_9am: observation.as_ref().map(|obs| obs.rain_since_9am),
+            rain_since_9am: observation.and_then(|obs| obs.rain_since_9am),
             extended_text: &today.extended_text,
             short_text: &today.short_text,
             humidity: observation.as_ref().map(|obs| obs.humidity),
@@ -403,7 +403,15 @@ impl FstringKey {
             Self::MaxTemp => s.push_str(&w.max_temp.to_string()),
             Self::OvernightMin => s.push_str(&w.overnight_min.to_string()),
             Self::TomorrowMax => s.push_str(&w.tomorrow_max.to_string()),
-            Self::RainSince9am => s.push_str(&w.rain_since_9am.unwrap_or(0.0).to_string()),
+            Self::RainSince9am => {
+                // API usually returns 0 if there hasn't been rain
+                // so take None to mean data unavailable
+                if let Some(rain) = w.rain_since_9am {
+                    s.push_str(&rain.to_string())
+                } else {
+                    s.push_str("??")
+                }
+            }
             Self::HourlyRainChance => s.push_str(&w.hourly_rain_chance.to_string()),
             Self::HourlyRainMin => s.push_str(&w.hourly_rain_min.to_string()),
             Self::HourlyRainMax => s.push_str(&w.hourly_rain_max.to_string()),
