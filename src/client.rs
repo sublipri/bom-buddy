@@ -12,7 +12,7 @@ use chrono::Duration;
 use chrono::Utc;
 use std::collections::VecDeque;
 use std::thread::sleep;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 use ureq::{Agent, AgentBuilder, Error, Response};
 
 const URL_BASE: &str = "https://api.weather.bom.gov.au/v1/locations";
@@ -94,7 +94,9 @@ impl Client {
 
     fn get_string(&self, url: &str) -> Result<String> {
         let response = self.get(url)?;
-        Ok(response.into_string()?)
+        let string = response.into_string()?;
+        trace!("{}", &string);
+        Ok(string)
     }
 
     fn get_json(&self, url: &str) -> Result<serde_json::Value> {
