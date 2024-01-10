@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
+use strum_macros::AsRefStr;
 
 // https://reg.bom.gov.au/info/forecast_icons.shtml
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, AsRefStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "title_case")]
 pub enum IconDescriptor {
     Sunny,
     Clear,
@@ -25,15 +27,13 @@ pub enum IconDescriptor {
 }
 
 impl IconDescriptor {
+    // TODO: Add option to use nerd font weather icons. They don't look as nice but have proper
+    // icons for all descriptors at night time unlike emojis
+    // https://erikflowers.github.io/weather-icons/
     pub fn get_icon_emoji(&self, is_night: bool) -> &str {
         match self {
-            Self::Sunny => {
-                if is_night {
-                    "🌙"
-                } else {
-                    "☀️"
-                }
-            }
+            Self::Sunny if is_night => "🌙",
+            Self::Sunny => "☀️",
             Self::Clear => "🌙",
             Self::MostlySunny => "🌤️",
             Self::PartlyCloudy => "⛅",
@@ -51,6 +51,14 @@ impl IconDescriptor {
             Self::Snow => "🌨️",
             Self::Storm => "⛈️",
             Self::Cyclone => "🌀",
+        }
+    }
+
+    pub fn get_description(&self, is_night: bool) -> &str {
+        match self {
+            Self::Sunny if is_night => "Clear",
+            Self::MostlySunny if is_night => "Mostly Clear",
+            _ => self.as_ref(),
         }
     }
 }
