@@ -369,9 +369,12 @@ pub struct HourlyArgs {
     /// Force an update even if a new forecast isn't due
     #[arg(short, long)]
     force_check: bool,
-    /// How many hours to show
+    /// How many hours to show (max 72)
     #[arg(short = 'H', long, default_value_t = 12)]
     hours: usize,
+    /// Show the 'feels like' temp in brackets if it differs from the actual temp
+    #[arg(short = 'l', long)]
+    feels_like: bool,
 }
 
 fn hourly(config: &Config, args: &HourlyArgs) -> Result<()> {
@@ -432,7 +435,11 @@ fn hourly(config: &Config, args: &HourlyArgs) -> Result<()> {
             let chance = format!("{}%", hour.rain.chance);
             let wind = format!("{} {}", hour.wind.speed_kilometre, hour.wind.direction);
             let gust = format!("{}", hour.wind.gust_speed_kilometre);
-            let temp = format!("{} ({})", hour.temp, hour.temp_feels_like);
+            let temp = if args.feels_like && hour.temp != hour.temp_feels_like {
+                format!("{} ({})", hour.temp, hour.temp_feels_like)
+            } else {
+                hour.temp.to_string()
+            };
             let desc = hour.icon_descriptor.get_description(hour.is_night);
 
             let cells = if show_rain {
