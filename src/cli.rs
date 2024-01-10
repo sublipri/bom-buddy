@@ -27,7 +27,7 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::thread::sleep;
 use strum::IntoEnumIterator;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 // Hacky way to display a default config value on the CLI.
 // Can't actually set a default value since it would override the config file
@@ -92,8 +92,8 @@ pub fn cli() -> Result<()> {
     let args = Cli::parse();
     let mut config = Config::from_cli(&args)?;
     let _guard = setup_logging(&config.main.logging);
-    debug!("Command line arguments: {:#?}", &args);
-    debug!("Config: {:#?}", &config);
+    trace!("Command line arguments: {:#?}", &args);
+    trace!("Config: {:#?}", &config);
 
     match &args.command {
         Some(Commands::Init(args)) => init(&mut config, args)?,
