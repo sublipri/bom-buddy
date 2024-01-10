@@ -144,8 +144,7 @@ impl Database {
         type_: &RadarType,
         max_frames: Option<u64>,
     ) -> Result<Vec<RadarImageDataLayer>> {
-        let max_frames = max_frames.map(|i| i as i32);
-        let max_frames = max_frames.unwrap_or(-1);
+        let max_frames = max_frames.map(|i| i as i32).unwrap_or(-1);
         let params = params![id, type_.id() as u8, max_frames];
         let sql = include_str!("../sql/get_radar_data_layers.sql");
         let mut stmt = self.conn.prepare(sql)?;
