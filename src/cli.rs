@@ -80,6 +80,8 @@ pub enum Commands {
     EditOpts,
     /// Display the 7-day forecast
     Daily(DailyArgs),
+    /// Display the hourly forecast
+    Hourly(HourlyArgs),
     /// Display the current weather
     Current(CurrentArgs),
     /// Download and view radar images
@@ -99,6 +101,7 @@ pub fn cli() -> Result<()> {
         Some(Commands::AddLocation) => add_location(&mut config)?,
         Some(Commands::EditOpts) => edit_weather_opts(&config)?,
         Some(Commands::Daily(args)) => daily(&config, args)?,
+        Some(Commands::Hourly(args)) => hourly(&config, args)?,
         Some(Commands::Current(args)) => current(&config, args)?,
         Some(Commands::Radar(args)) => radar(&config, args.monitor)?,
         None => {}
@@ -353,6 +356,114 @@ fn daily(config: &Config, args: &DailyArgs) -> Result<()> {
                 Cell::new(&description),
             ]);
         }
+        println!("{table}");
+    }
+    Ok(())
+}
+
+#[derive(Parser, Debug, Serialize, Deserialize)]
+pub struct HourlyArgs {
+    /// Check for updates if due
+    #[arg(short, long)]
+    check: bool,
+    /// Force an update even if a new forecast isn't due
+    #[arg(short, long)]
+    force_check: bool,
+    /// How many hours to show
+    #[arg(short = 'H', long, default_value_t = 12)]
+    hours: usize,
+}
+
+fn hourly(config: &Config, args: &HourlyArgs) -> Result<()> {
+    if config.main.locations.is_empty() {
+        return Err(anyhow!("No locations specified"));
+    }
+    let client = config.get_client();
+    let database = config.get_database()?;
+    let mut locations = ids_to_locations(&config.main.locations, &client, &database)?;
+
+    if args.force_check {
+        for location in &mut locations {
+            let new_hourly = client.get_hourly(&location.geohash)?;
+            location.weather.update_hourly(Utc::now(), new_hourly);
+            database.update_weather(location)?;
+        }
+    } else if args.check {
+        update_if_due(&mut locations, &client, &database)?;
+    }
+
+    for location in locations {
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic);
+
+        let issue_time = location
+            .weather
+            .hourly_forecast
+            .issue_time
+            .with_timezone(&Local)
+            .format("%r");
+        let title = format!("Hourly forecast for {} issued at {}", location, issue_time);
+
+        let todo = location
+            .weather
+            .hourly_forecast
+            .data
+            .iter()
+            .filter(|h| h.next_forecast_period > Utc::now())
+            .take(args.hours);
+
+        let show_rain = todo.clone().any(|h| h.rain.chance > 0);
+        // TODO: Make this configurable. Perhaps let the user specify column names paired with
+        // an fstring that's used to generate the row text.
+        let columns = if show_rain {
+            vec![
+                "Time", "Temp", "Desc", "Rain", "Chance", "Wind", "Gust", "Humidity",
+            ]
+        } else {
+            vec!["Time", "Temp", "Desc", "Wind", "Gust", "Humidity"]
+        };
+        table.set_header(columns);
+
+        for hour in todo {
+            let time = hour.time.with_timezone(&Local).format("%a %r").to_string();
+            let chance = format!("{}%", hour.rain.chance);
+            let wind = format!("{} {}", hour.wind.speed_kilometre, hour.wind.direction);
+            let gust = format!("{}", hour.wind.gust_speed_kilometre);
+            let temp = format!("{} ({})", hour.temp, hour.temp_feels_like);
+            let desc = hour.icon_descriptor.get_description(hour.is_night);
+
+            let cells = if show_rain {
+                let rain = if let Some(max) = hour.rain.amount.max {
+                    format!("{}-{}{}", hour.rain.amount.min, max, hour.rain.amount.units)
+                } else {
+                    "0mm".to_string()
+                };
+                vec![
+                    Cell::new(&time),
+                    Cell::new(&temp),
+                    Cell::new(desc),
+                    Cell::new(&rain),
+                    Cell::new(&chance),
+                    Cell::new(&wind),
+                    Cell::new(&gust),
+                    Cell::new(format!("{}%", &hour.relative_humidity)),
+                ]
+            } else {
+                vec![
+                    Cell::new(&time),
+                    Cell::new(temp),
+                    Cell::new(desc),
+                    Cell::new(&wind),
+                    Cell::new(&gust),
+                    Cell::new(format!("{}%", &hour.relative_humidity)),
+                ]
+            };
+            table.add_row(cells);
+        }
+        println!("{title}");
         println!("{table}");
     }
     Ok(())
