@@ -1,7 +1,14 @@
 [package]
 name = "bom-buddy"
 version = "0.1.0"
+authors = ["sublipri"]
 edition = "2021"
+license = "GPL-3.0-only"
+description = "Australian weather CLI utility"
+repository = "https://github.com/sublipri/bom-buddy"
+keywords = ["weather", "cli"]
+categories = ["command-line-utilities"]
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0.75"
