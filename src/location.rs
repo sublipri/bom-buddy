@@ -36,7 +36,10 @@ pub struct LocationData {
     pub longitude: f64,
     pub marine_area_id: Option<String>,
     pub name: String,
-    pub state: State,
+    // The locations API endpoint sometimes returns a state with the value 'OT' (Other??)
+    // The SearchResult seems to have a valid state in these cases, so keep this as a String and
+    // use the SearchResult's State enum in the create_location function
+    pub state: String,
     pub tidal_point: Option<String>,
     pub timezone: String,
 }
