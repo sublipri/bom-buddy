@@ -325,10 +325,19 @@ fn daily(config: &Config, args: &DailyArgs) -> Result<()> {
 
             let max = day.temp_max.map_or("".to_string(), |t| t.to_string());
             let min = day.temp_min.map_or("".to_string(), |t| t.to_string());
+            let mut extended = day.extended_text.clone().unwrap_or(String::new());
             let description = if args.extended {
-                day.extended_text.clone().unwrap_or(String::new())
+                extended
             } else {
-                day.short_text.clone().unwrap_or(String::new())
+                let short = day.short_text.clone().unwrap_or(String::new());
+                if short.is_empty() && !extended.is_empty() {
+                    if let Some(idx) = extended.find('.') {
+                        extended.truncate(idx + 1);
+                    }
+                    extended
+                } else {
+                    short
+                }
             };
 
             let rain = if day.rain.amount.max.is_some() && day.rain.amount.lower_range.is_some() {
