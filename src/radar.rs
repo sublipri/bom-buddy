@@ -751,7 +751,9 @@ impl RadarImageManager {
     }
 
     fn remove_images(&mut self, idx: usize) -> Result<Vec<RadarImageDataLayer>> {
-        let removed = self.data_layers.drain(..idx).collect();
+        // Prevent a panic if the database is somehow out of sync with the filesystem
+        let didx = idx.min(self.data_layers.len());
+        let removed = self.data_layers.drain(..didx).collect();
         for frame in self.frames.drain(..idx) {
             if frame.path.exists() {
                 debug!("Deleting old radar image {}", frame.path.display());
