@@ -21,11 +21,9 @@ BOM Buddy is an Australian weather CLI utility designed for Linux environments. 
 
 `cargo install bom-buddy`
 
-### Arch User Repository
+### [Arch User Repository](https://aur.archlinux.org/packages/bom-buddy)
 
-There is a PKGBUILD available on the [AUR](https://aur.archlinux.org/packages/bom-buddy). Use an [AUR helper](https://wiki.archlinux.org/title/AUR_helpers) for easy installation:
-
-`paru -S bom-buddy`
+Your method of choice e.g. `paru -S bom-buddy`
 
 ## Usage
 
