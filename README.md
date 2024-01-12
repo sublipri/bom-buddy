@@ -15,6 +15,18 @@ BOM Buddy is an Australian weather CLI utility designed for Linux environments. 
 - Send desktop notifications when weather warnings are issued
 - View past observations
 
+## Installation
+
+### [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+
+`cargo install bom-buddy`
+
+### Arch User Repository
+
+There is a PKGBUILD available on the [AUR](https://aur.archlinux.org/packages/bom-buddy). Use an [AUR helper](https://wiki.archlinux.org/title/AUR_helpers) for easy installation:
+
+`paru -S bom-buddy`
+
 ## Usage
 
 ### Configuration
