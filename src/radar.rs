@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::ftp::FtpClient;
 use crate::persistence::Database;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use clap::Parser;
 use image::codecs::png::PngDecoder;
@@ -20,7 +20,7 @@ use std::thread::sleep;
 use strum::{Display, EnumCount};
 use strum_macros::{EnumIter, EnumString};
 use suppaftp::list::File;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 pub type RadarId = u32;
 
@@ -455,6 +455,11 @@ pub fn get_radar_image_managers<'a>(
         let feature_layers = if let Ok(layers) = db.get_radar_feature_layers(id, radar_type) {
             layers
         } else {
+            info!(
+                "Fetching feature layers for IDR{:02}{}",
+                id,
+                radar_type.id()
+            );
             let layers = ftp.get_radar_feature_layers(id, *radar_type)?;
             db.insert_radar_feature_layers(&layers)?;
             layers
@@ -475,7 +480,7 @@ pub fn get_radar_image_managers<'a>(
             data_layers,
             feature_layers,
             opts.clone(),
-        );
+        )?;
         managers.push(manager);
     }
     Ok(managers)
@@ -495,6 +500,11 @@ pub fn fetch_new_data_layers(
     let mut check_ftp_files = false;
 
     let existing_names = db.get_radar_data_layer_names(radar_type)?;
+    info!(
+        "Fetching new data layers for IDR{:02}{}",
+        id,
+        radar_type.id()
+    );
     if let Some(last_name) = existing_names.last() {
         let mut last_layer = &RadarImageDataLayer::from_filename(last_name).unwrap();
         loop {
@@ -638,20 +648,8 @@ impl RadarImageManager {
         data_layers: Vec<RadarImageDataLayer>,
         feature_layers: Vec<RadarImageFeatureLayer>,
         opts: RadarImageOptions,
-    ) -> Self {
-        let mpv = if opts.open_mpv {
-            let socket_name = format!("IDR{:02}{}.sock", radar_id, radar_type.id());
-            Some(MpvRadarViewer {
-                radar_id,
-                radar_type,
-                socket_path: opts.mpv_ipc_dir.join(socket_name),
-                handle: None,
-                frame_delay: opts.frame_delay_ms as f32 / 1000.0,
-            })
-        } else {
-            None
-        };
-
+    ) -> Result<Self> {
+        let mpv = MpvRadarViewer::from_opts(radar_id, radar_type, &opts)?;
         let image_dirname = format!("IDR{:02}{}", radar_id, radar_type.id());
         let image_dir = opts.image_dir.join(image_dirname);
         let mut frames = Vec::new();
@@ -663,7 +661,7 @@ impl RadarImageManager {
             }
         }
 
-        Self {
+        Ok(Self {
             mpv,
             radar_id,
             radar_type,
@@ -673,7 +671,7 @@ impl RadarImageManager {
             frames,
             image_dir,
             opts,
-        }
+        })
     }
 
     fn construct_frames(&mut self) -> Result<()> {
@@ -854,6 +852,37 @@ struct MpvRadarViewer {
 }
 
 impl MpvRadarViewer {
+    pub fn from_opts(
+        radar_id: RadarId,
+        radar_type: RadarType,
+        opts: &RadarImageOptions,
+    ) -> Result<Option<Self>> {
+        if opts.open_mpv {
+            let output = std::process::Command::new("mpv")
+                .arg("--version")
+                .output()
+                .context("Failed to open MPV")?;
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if !output.status.success() {
+                return Err(anyhow!("Failed to open MPV. {stdout}"));
+            } else {
+                debug!("Using {}", stdout);
+            }
+
+            let socket_name = format!("IDR{:02}{}.sock", radar_id, radar_type.id());
+            Ok(Some(Self {
+                radar_id,
+                radar_type,
+                socket_path: opts.mpv_ipc_dir.join(socket_name),
+                handle: None,
+                frame_delay: opts.frame_delay_ms as f32 / 1000.0,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn open_images(&mut self, paths: &[&Path], args: &[String]) -> Result<()> {
         let mut mpv_is_running = false;
         if let Some(ref mut handle) = self.handle {
@@ -908,7 +937,7 @@ impl MpvRadarViewer {
     fn start(&mut self, image_paths: &[&Path], args: &[String]) -> Result<()> {
         let mut ipc_arg = OsString::from("--input-ipc-server=");
         ipc_arg.push(&self.socket_path);
-        let app_id = format!("mpv-radar-IDR{}{}", self.radar_id, self.radar_type.id());
+        let app_id = format!("mpv-radar-IDR{:02}{}", self.radar_id, self.radar_type.id());
         fs::create_dir_all(self.socket_path.parent().unwrap())?;
         let child = std::process::Command::new("mpv")
             .arg(ipc_arg)

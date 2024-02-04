@@ -545,6 +545,7 @@ fn radar(config: &Config, monitor: bool) -> Result<()> {
     let mut ftp = FtpClient::new()?;
     let mut managers = Vec::new();
     for radar in &config.main.radars {
+        info!("Fetching radar images for {}", &radar.name);
         managers.extend(get_radar_image_managers(
             radar.id,
             &mut db,
@@ -579,12 +580,21 @@ fn radar(config: &Config, monitor: bool) -> Result<()> {
 fn manage_radar_images(managers: &mut Vec<RadarImageManager>, db: &mut Database) -> Result<()> {
     for manager in managers {
         if manager.opts.create_png {
+            info!(
+                "Writing radar PNG files to {}",
+                &manager.opts.image_dir.display()
+            );
             manager.write_pngs()?;
         }
         if manager.opts.create_apng {
+            info!(
+                "Writing radar APNG file to {}",
+                &manager.opts.image_dir.display()
+            );
             manager.create_apng()?;
         }
         if manager.opts.open_mpv {
+            info!("Opening radar images in MPV");
             manager.open_images()?;
         }
         let removed = manager.prune()?;
