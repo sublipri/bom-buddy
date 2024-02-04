@@ -7,6 +7,7 @@ use crate::station::WeatherStation;
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
 use rusqlite::{named_params, params, Connection, Row};
+use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tracing::{debug, info};
@@ -17,6 +18,9 @@ pub struct Database {
 }
 impl Database {
     pub fn from_path(path: PathBuf) -> Result<Database> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         let connection = Connection::open(&path)?;
         Ok(Self {
             path,

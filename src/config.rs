@@ -142,6 +142,9 @@ impl Config {
 
     pub fn write_config_file(&self) -> Result<()> {
         let yaml = serde_yaml::to_string(&self.main)?;
+        if let Some(parent) = self.config_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         fs::write(&self.config_path, yaml)?;
         Ok(())
     }
