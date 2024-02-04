@@ -653,7 +653,7 @@ impl RadarImageManager {
         };
 
         let image_dirname = format!("IDR{:02}{}", radar_id, radar_type.id());
-        let image_dir = opts.image_dir.join(&image_dirname);
+        let image_dir = opts.image_dir.join(image_dirname);
         let mut frames = Vec::new();
         if let Ok(entries) = fs::read_dir(&image_dir) {
             for entry in entries {
@@ -823,7 +823,7 @@ impl RadarImageManager {
         let start = self.frames.first().unwrap().datetime.format("%Y%m%d%H%M");
         let end = self.frames.last().unwrap().datetime.format("%Y%m%d%H%M");
         let filename = format!("{}.T.{}-{}.png", self, start, end);
-        let path = self.image_dir.join(&filename);
+        let path = self.image_dir.join(filename);
         let out_file = fs::File::create(path)?;
         let mut writer = BufWriter::new(out_file);
         let mut pngs = Vec::new();
