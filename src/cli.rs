@@ -311,7 +311,7 @@ fn daily(config: &Config, args: &DailyArgs) -> Result<()> {
             .daily_forecast
             .issue_time
             .with_timezone(&Local)
-            .format("%r");
+            .format("%r on %a %d %b");
 
         let header = format!("Forecast for {} issued at {}", location, issued);
         println!("{header}");
@@ -421,7 +421,7 @@ fn hourly(config: &Config, args: &HourlyArgs) -> Result<()> {
             .hourly_forecast
             .issue_time
             .with_timezone(&Local)
-            .format("%r");
+            .format("%r on %a %d %b");
         let title = format!("Hourly forecast for {} issued at {}", location, issue_time);
 
         let todo = location
