@@ -118,6 +118,11 @@ pub struct InitArgs {
 fn init(config: &mut Config, args: &InitArgs) -> Result<()> {
     if args.force {
         remove_if_exists(&config.main.db_path)?;
+    } else if config.main.db_path.exists() {
+        return Err(anyhow!(
+            "{} already exists. Use bom-buddy init --force to overwrite",
+            &config.main.db_path.display()
+        ));
     }
     let client = config.get_client();
     let mut db = config.get_database()?;
